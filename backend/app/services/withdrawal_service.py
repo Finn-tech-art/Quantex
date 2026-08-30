@@ -282,6 +282,20 @@ async def create_request(
         email=user["email"],
         subject="Confirm your Quantex withdrawal",
         heading=f"Confirm withdrawal of {amount} {asset_code}",
+        # Shown as a details table in the email (see render_otp_email) so
+        # the confirmation makes it obvious exactly what's being approved —
+        # important for something money-moving, where a user should be able
+        # to catch a wrong destination address or network from the email
+        # alone before ever entering the code. net_amount/fee_amount are
+        # already computed just above, so no extra work happens here beyond
+        # formatting them for display.
+        details=[
+            ("Amount", f"{amount} {asset_code}"),
+            ("Network", network_code),
+            ("Destination", destination_address),
+            ("Fee", f"{fee_amount} {asset_code}"),
+            ("You'll receive", f"{net_amount} {asset_code}"),
+        ],
     )
 
     return {

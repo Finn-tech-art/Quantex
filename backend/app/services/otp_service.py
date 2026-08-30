@@ -27,8 +27,20 @@ def _cooldown_key(purpose: str, identifier: str) -> str:
 
 
 async def generate_and_send_otp(
-    purpose: str, identifier: str, email: str, subject: str, heading: str
+    purpose: str,
+    identifier: str,
+    email: str,
+    subject: str,
+    heading: str,
+    details: list[tuple[str, str]] | None = None,
 ) -> None:
+    """details: optional list of (label, value) rows shown in the email
+    body between the heading and the code — e.g. withdrawal_service.py
+    passes the amount/network/destination address here so a withdrawal
+    confirmation email shows exactly what's being confirmed, not just a
+    bare code. Left as None (the default) by every OTHER caller (currently
+    just email verification), which renders no such table — see
+    render_otp_email's own docstring for the rendering side of this."""
     r = get_redis()
     if await r.exists(_cooldown_key(purpose, identifier)):
         raise OtpCooldownError("Please wait before requesting another code")
@@ -38,7 +50,7 @@ async def generate_and_send_otp(
     await r.delete(_attempts_key(purpose, identifier))
     await r.set(_cooldown_key(purpose, identifier), "1", ex=OTP_RESEND_COOLDOWN_SECONDS)
 
-    await send_email(to=email, subject=subject, html=render_otp_email(code, heading))
+    await send_email(to=email, subject=subject, html=render_otp_email(code, heading, details))
 
 
 async def verify_otp(purpose: str, identifier: str, code: str) -> bool:

@@ -1,0 +1,28 @@
+# Railway deployment config for the FastAPI backend service.
+#
+# This repo is a monorepo (frontend + backend as two separate Railway
+# services from the same GitHub repo — see the root CLAUDE.md's "Hosting"
+# line). When creating this service in Railway's dashboard, set its
+# "Root Directory" to `backend` — that's what tells Railway to use THIS
+# file (and this folder's requirements.txt) rather than the frontend's.
+#
+# No [build] section is needed: Railway's Nixpacks builder auto-detects a
+# Python app from requirements.txt and runs `pip install -r requirements.txt`
+# on its own. If a build step is ever needed later (e.g. a DB migration
+# step), add it here as `buildCommand`.
+
+[deploy]
+# Binds to 0.0.0.0 (not 127.0.0.1) so Railway's router can actually reach
+# the process, and to $PORT (Railway assigns this at runtime — never
+# hardcode a port number here, it's different every deploy). No --reload
+# here (that's a dev-only flag: it re-execs the whole server on every file
+# change, which is pointless and wasteful for a deployed process that
+# never has its files change underneath it).
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+
+# If the server crashes (e.g. a bad deploy, an unhandled startup error),
+# Railway restarts it automatically rather than leaving the service down.
+# "ON_FAILURE" with 10 retries is Railway's own default — written out
+# explicitly here so it's visible/tunable rather than an invisible default.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

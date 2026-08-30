@@ -162,6 +162,22 @@ async def stream_price(symbol: str) -> None:
     uri = f"{BINANCE_WS_BASE}/{stream_name}"
     r = get_redis()
 
+    # Tracks the last price actually WRITTEN to Redis, purely in this
+    # process's own memory — never read back from Redis itself, since a
+    # round-trip GET-before-SET would just trade "one write" for "one read
+    # plus sometimes a write," which doesn't reduce Redis usage at all.
+    # Binance's @ticker stream pushes a message roughly once a second
+    # whether or not the price actually moved; on Upstash's request-based
+    # free tier, unconditionally writing every one of those (3 symbols,
+    # ~1/sec, forever) burns through the monthly request quota in a couple
+    # of days even when the market is flat. Skipping the write whenever the
+    # price hasn't changed since our last write cuts that volume down to
+    # roughly "one write per real price movement" instead. Deliberately
+    # kept as a local variable (not a module-level one) — each symbol gets
+    # its own stream_price() call/task, so each needs its own independent
+    # "last written" tracker rather than sharing one across symbols.
+    last_written_price: str | None = None
+
     # This outer `while True` is the reconnect loop — it wraps the entire
     # connection attempt, so ANY failure inside (dropped connection, DNS
     # hiccup, Binance-side restart) is caught below and simply retried,
@@ -186,14 +202,20 @@ async def stream_price(symbol: str) -> None:
                     # fields, of which "c" ("close price" — i.e. the current
                     # last-traded price) is the one we actually care about.
                     data = json.loads(message)
+                    price = data["c"]
 
-                    # Overwrite the same Redis key every tick — we only ever
-                    # care about the LATEST price, not a history of every
-                    # tick (that history already exists on Binance itself if
-                    # ever needed). `r.set` with no `ex=` here means the key
-                    # never expires on its own; it just keeps getting
-                    # overwritten as long as this loop keeps running.
-                    await r.set(_price_key(symbol), data["c"])
+                    # Skip the Redis write entirely when the price hasn't
+                    # moved since we last wrote it — see last_written_price's
+                    # comment above for why. When it HAS moved, this still
+                    # overwrites the same key rather than appending: we only
+                    # ever care about the LATEST price, not a history of
+                    # every tick (that history already exists on Binance
+                    # itself if ever needed). `r.set` with no `ex=` here
+                    # means the key never expires on its own; it just keeps
+                    # getting overwritten as prices actually change.
+                    if price != last_written_price:
+                        await r.set(_price_key(symbol), price)
+                        last_written_price = price
         except Exception:
             # Broad `except Exception` is intentional here: literally any
             # failure while connected (network drop, malformed message,

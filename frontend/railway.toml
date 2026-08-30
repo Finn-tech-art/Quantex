@@ -1,0 +1,26 @@
+# Railway deployment config for the frontend (Vite/React SPA — includes
+# the /admin route, same codebase, see root CLAUDE.md).
+#
+# This repo is a monorepo (frontend + backend as two separate Railway
+# services from the same GitHub repo). When creating THIS service in
+# Railway's dashboard, set its "Root Directory" to `frontend` — that's
+# what tells Railway to use this file (and this folder's package.json)
+# rather than the backend's.
+#
+# Vite has no production server of its own — `vite preview` is explicitly
+# a dev-only tool per Vite's own docs, not meant for real traffic. `serve`
+# (added to package.json's dependencies) is a small static file server;
+# its `-s` flag is what makes client-side routing work in production —
+# it rewrites any unknown path back to index.html instead of 404ing, which
+# react-router-dom's BrowserRouter (see App.jsx) needs to handle a direct
+# load/refresh of e.g. /bots/create or /admin instead of just in-app clicks.
+
+[build]
+buildCommand = "npm run build"
+
+[deploy]
+# Runs the "start" script added to package.json: `serve -s dist -l $PORT`.
+# $PORT is assigned by Railway at runtime — never hardcode a port here.
+startCommand = "npm run start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

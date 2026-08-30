@@ -20,6 +20,7 @@
 // and only one (Referrals) currently exists anywhere in the schema.
 // Revisit as a quad once there's real content for the other 3 slots.
 
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -45,24 +46,7 @@ export default function MenuPage() {
       <div style={{ maxWidth: 384, margin: "0 auto", padding: "0 20px", display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
         {/* menu-header */}
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: "var(--radius-full)",
-              background: "var(--teal-deep)",
-              color: "var(--on-accent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "var(--font-display)",
-              fontWeight: 700,
-              fontSize: "22px",
-              flexShrink: 0,
-            }}
-          >
-            {initial}
-          </div>
+          <Avatar avatarUrl={user.avatar_url} initial={initial} />
           <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
             <span
               style={{
@@ -117,6 +101,55 @@ export default function MenuPage() {
           <MenuItem icon="logout" text={t("menu.items.logout")} onClick={logout} />
         </MenuGroup>
       </div>
+    </div>
+  );
+}
+
+// Shows the user's real Google profile photo (avatarUrl comes from
+// user.avatar_url, only ever set for a Google-OAuth login — see
+// backend/app/utils/auth.py's get_current_user) when there is one, falling
+// back to the plain teal initial-letter circle this screen always used to
+// show otherwise — same "img with onError fallback" pattern as
+// MarketsPage.jsx's CoinLogo, so a broken/expired photo URL degrades to the
+// letter circle instead of a broken-image icon. `broken` starts false and
+// flips true permanently once onError fires; it deliberately isn't reset if
+// avatarUrl changes, since a full remount (this component unmounting/
+// remounting, e.g. on logout+login as a different user) is what naturally
+// clears it back to false, rather than needing a useEffect to watch for it.
+function Avatar({ avatarUrl, initial }) {
+  const [broken, setBroken] = useState(false);
+
+  if (avatarUrl && !broken) {
+    return (
+      <img
+        src={avatarUrl}
+        alt=""
+        width={56}
+        height={56}
+        onError={() => setBroken(true)}
+        style={{ borderRadius: "var(--radius-full)", flexShrink: 0, objectFit: "cover" }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: 56,
+        height: 56,
+        borderRadius: "var(--radius-full)",
+        background: "var(--teal-deep)",
+        color: "var(--on-accent)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "var(--font-display)",
+        fontWeight: 700,
+        fontSize: "22px",
+        flexShrink: 0,
+      }}
+    >
+      {initial}
     </div>
   );
 }

@@ -61,6 +61,7 @@ def me(user: dict = Depends(get_current_user)):
         kyc_status=auth_service.kyc_status_code(user["kyc_status_id"]),
         email_verified=user["email_verified"],
         created_at=user["created_at"],
+        avatar_url=user.get("avatar_url"),
     )
 
 

@@ -28,4 +28,20 @@ async def get_current_user(
     # not auth_user.email_confirmed_at, which Supabase sets on every signup now
     # that the project's "Confirm email" gate is off and no longer reflects our
     # own OTP-based verification.
-    return ensure_user_profile(auth_user.id, auth_user.email, referral_code)
+    profile = ensure_user_profile(auth_user.id, auth_user.email, referral_code)
+
+    # Deliberately NOT written into the `users` table row (ensure_user_profile
+    # never sees this) — it's read fresh from Supabase's own live OAuth
+    # session on every single request instead, then merged onto the profile
+    # dict just for this response. That's the right call for something
+    # purely cosmetic that Google already keeps current on its end: no
+    # migration needed to add a column, and it can never go stale the way a
+    # once-saved copy could if someone changes their Google photo later.
+    # Google's OAuth metadata sets both "avatar_url" and "picture" to the
+    # same URL — checking both means this still works if that ever changes
+    # on Supabase/Google's side. None for an email/password account, since
+    # user_metadata simply won't have either key.
+    profile["avatar_url"] = (auth_user.user_metadata or {}).get("avatar_url") or (
+        auth_user.user_metadata or {}
+    ).get("picture")
+    return profile

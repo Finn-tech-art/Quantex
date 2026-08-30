@@ -1,0 +1,44 @@
+# Root-level .gitignore — covers anything at the repo root itself.
+# frontend/.gitignore and backend/.gitignore already handle their own
+# subtrees (node_modules, .venv, dist, __pycache__, .env, etc.) — git
+# applies a .gitignore at every directory level along a path, so those
+# stay in effect on their own; this file only needs to catch what they
+# don't.
+
+# Never commit real secrets/config.
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Claude Code's own local session state — not part of the app.
+.claude/
+
+# tron-hello/ is a standalone scratch script for manually testing TRC-20
+# deposits against the Nile testnet (see send-usdt.js) — not part of the
+# documented frontend/backend/shared monorepo layout, and it hardcodes a
+# throwaway testnet private key. Excluded entirely rather than committed,
+# even though that key is confirmed worthless outside Nile testnet.
+tron-hello/

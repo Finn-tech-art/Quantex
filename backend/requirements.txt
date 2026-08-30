@@ -1,0 +1,23 @@
+fastapi==0.115.0
+email-validator==2.2.0
+uvicorn[standard]==0.32.0
+pydantic-settings==2.6.0
+python-dotenv==1.0.1
+supabase==2.9.1
+redis==5.2.0
+celery==5.4.0
+httpx==0.27.2
+bip-utils==2.12.2
+tronpy==0.6.2
+web3==7.16.0
+websockets==15.0.1
+
+# Admin auth (module 1) — admins table is separate from Supabase Auth's
+# users pool, so it needs its own password hashing (bcrypt) and its own
+# signed session token (PyJWT) rather than reusing gotrue/Supabase Auth.
+bcrypt==4.2.0
+PyJWT==2.10.1
+
+# KYC document upload (Phase 4) — FastAPI's UploadFile/File(...) multipart
+# form parsing needs this installed, even though nothing imports it by name.
+python-multipart==0.0.32

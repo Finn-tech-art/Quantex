@@ -1,0 +1,175 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap");
+
+:root {
+  /* Color — Cream */
+  --cream-base: #F6F1E6;
+  --cream-deep: #EEE6D3;
+  --cream-line: #E0D5BE;
+
+  /* Color — Teal */
+  --teal-base: #0E6B62;
+  --teal-deep: #0A4A44;
+  --teal-sage: #8FAFA4;
+  --teal-pale: #DCE8E3;
+
+  /* Color — Ink (text) */
+  --ink-base: #2A2620;
+  --ink-soft: #6B6357;
+
+  /* Color — Semantic */
+  --gain: #1FA968;
+  --gain-on-dark: #6EEAB0;
+  --loss: #AE5A3E;
+  --warning-bg: #F2E4C8;
+  --warning-text: #8A6A2C;
+  --pending-dot: #C9A15B;
+
+  /* --on-accent is DELIBERATELY never redefined below — it's the fixed
+     light warm-white color for text/icons that sit on top of an
+     intentionally-dark accent surface (a teal-deep hero card, a
+     teal-base button) in BOTH themes. Those surfaces stay dark-ish on
+     purpose in dark mode too (the whole point of a hero card is to stand
+     out from the page), so their foreground content must stay fixed
+     rather than inverting with --cream-base/--ink-base, which DO flip
+     per theme below. Using --cream-base for this role (the original,
+     pre-dark-mode shortcut, since it happened to equal this exact value
+     in light mode) is what a dark theme would otherwise silently break —
+     see the theming module's own notes for the full explanation. Search
+     the codebase for "on-accent" for every call site that depends on this
+     staying fixed.  */
+  --on-accent: #F6F1E6;
+
+  /* Typography */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-data: 'IBM Plex Mono', monospace;
+
+  /* Corner radius scale */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 20px;
+  --radius-full: 36px;
+
+  /* Spacing scale (base unit 2px) */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-10: 20px;
+  --space-11: 22px;
+  --space-16: 32px;
+}
+
+/* ── Dark mode ────────────────────────────────────────────────────────────
+   Two ways this can activate, matching how ThemeContext.jsx drives it:
+     1. Explicit choice — ThemeContext sets data-theme="dark"|"light" on
+        <html> as soon as it resolves (from localStorage, or the system
+        preference on a first visit) and keeps it in sync with the toggle
+        in Menu. This block, keyed on the attribute, is what makes an
+        explicit choice always win.
+     2. No explicit choice yet (a brief instant before React mounts, or if
+        JS is disabled) — the plain @media query below covers that so the
+        page doesn't flash the wrong theme, guarded by :not([data-theme=
+        "light"]) so an explicit light choice still overrides a dark
+        system preference.
+   Only the "surface" and "text" token families flip here — --teal-sage,
+   --gain-on-dark, and --on-accent (defined above) are deliberately absent
+   from both blocks below: they're already scoped to "content sitting on a
+   permanently-dark accent surface" and stay correct unchanged in both
+   themes. To retune the dark palette, edit the values here only — every
+   page already reads these same variable names, so nothing else needs to
+   change. */
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    --cream-base: #17150F;
+    --cream-deep: #211E17;
+    --cream-line: #332E22;
+    --teal-base: #22A896;
+    --teal-deep: #0F3D37;
+    --teal-pale: #1A3D37;
+    --ink-base: #EFE8D8;
+    --ink-soft: #A69C89;
+    --loss: #D97B5C;
+    --warning-bg: #3A2E15;
+    --warning-text: #E0B563;
+  }
+}
+
+:root[data-theme="dark"] {
+  --cream-base: #17150F;
+  --cream-deep: #211E17;
+  --cream-line: #332E22;
+  --teal-base: #22A896;
+  --teal-deep: #0F3D37;
+  --teal-pale: #1A3D37;
+  --ink-base: #EFE8D8;
+  --ink-soft: #A69C89;
+  --loss: #D97B5C;
+  --warning-bg: #3A2E15;
+  --warning-text: #E0B563;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--cream-base);
+  color: var(--ink-base);
+  /* Token values change instantly on toggle; this is what makes the
+     surfaces/text actually animate between them instead of snapping. */
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.qx-psi-bowl,
+.qx-psi-stem {
+  stroke-dasharray: 1 1;
+}
+.qx-psi-drawing .qx-psi-bowl,
+.qx-psi-drawing .qx-psi-stem {
+  animation: qx-psi-draw 2.4s ease-in-out infinite;
+}
+.qx-psi-drawing .qx-psi-stem {
+  animation-delay: 0.25s;
+}
+@keyframes qx-psi-draw {
+  0% {
+    stroke-dashoffset: 1;
+  }
+  38% {
+    stroke-dashoffset: 0;
+  }
+  70% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qx-psi-mark,
+  .qx-psi-mark .qx-psi-bowl,
+  .qx-psi-mark .qx-psi-stem {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
+
+/* Pulse — used by the live status dot on the demo execution log */
+@keyframes pulse {
+  0%   { opacity: 1; transform: scale(1); }
+  50%  { opacity: 0.45; transform: scale(0.75); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="animation: pulse"] {
+    animation: none !important;
+  }
+}

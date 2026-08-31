@@ -13,9 +13,8 @@ const APP_URL = "https://trading.onquantex.com";
       <span class="qx-eyebrow">Learn</span>
       <h1>How trading, and the bots, actually work</h1>
       <p class="qx-lead">
-        Not a sales pitch, just the mechanics: what happens when you place
-        an order yourself, and what each bot is actually doing with your
-        money while you're not watching.
+        What actually happens when you place an order yourself, and what
+        each bot is doing with your money while you're not watching.
       </p>
     </div>
   </section>
@@ -24,20 +23,20 @@ const APP_URL = "https://trading.onquantex.com";
     <div class="qx-container qx-prose">
       <h2>Spot trading, in plain English</h2>
       <p>
-        "Spot" just means you're buying or selling a coin at whatever
-        price the market is at right now, and you own the coin outright
-        the moment the trade fills, no leverage, no expiry date.
+        "Spot" means buying or selling a coin at whatever price the
+        market is at right now. You own the coin outright the moment the
+        trade fills. No leverage, no expiry date.
       </p>
       <p>
         Every price you see is really two prices: the <strong>bid</strong>
         (the highest price someone's currently offering to buy at) and the
         <strong>ask</strong> (the lowest price someone's offering to sell
         at). The gap between them is the spread. Place a
-        <strong>market order</strong> and you take whatever the best
-        available bid/ask is, right now, guaranteed to fill. Place a
+        <strong>market order</strong> and you take the best available
+        bid/ask right now, guaranteed to fill. Place a
         <strong>limit order</strong> instead and you name your own price
-        and wait, it only fills if the market comes to you, but it might
-        never fill at all.
+        and wait. It only fills if the market comes to you, and it might
+        not fill at all.
       </p>
     </div>
   </section>
@@ -46,18 +45,18 @@ const APP_URL = "https://trading.onquantex.com";
     <div class="qx-container qx-prose">
       <h2>What a trading bot actually does</h2>
       <p>
-        A bot isn't intelligence and it isn't magic. It's a small program
-        running on a schedule, checking a condition, and placing the same
-        kind of buy/sell order you could place by hand, just without
-        needing you to sit and watch a chart at 3am. Every strategy below
-        boils down to "check something, then act on a rule", the
-        difference between them is what they check and when they act.
+        A bot isn't intelligence, and it isn't magic. It's a small program
+        that checks a condition on a schedule and places the same kind of
+        buy/sell order you could place by hand. It just doesn't need you
+        awake at 3am to do it. Every strategy below comes down to "check
+        something, then act on a rule." The difference between them is
+        what they check and when they act.
       </p>
       <p>
         None of them predict the future or guarantee a profit. A bot
-        working a bad market condition for its strategy will lose money
-        just as a human would, it just does it on a schedule instead of on
-        a hunch.
+        running the wrong strategy for the market will lose money just
+        like a human would. It just does it on a schedule instead of a
+        hunch.
       </p>
     </div>
   </section>
@@ -69,15 +68,14 @@ const APP_URL = "https://trading.onquantex.com";
         You set a price range and a number of steps ("grid levels") inside
         it. The bot lays a ladder of buy orders below the current price
         and sell orders above it, spaced evenly through that range. As the
-        price ticks up and down inside the range, it keeps buying the dips
-        and selling the bounces, over and over, off the same back-and-forth
-        motion.
+        price moves up and down inside the range, the bot keeps buying
+        the dips and selling the bounces, over and over.
       </p>
       <p>
         <strong>Works best when:</strong> the price is oscillating sideways
         inside a range rather than committing to a direction.
         <strong>Struggles when:</strong> the price breaks hard through one
-        edge of the range and keeps going, the bot is left holding a
+        edge of the range and keeps going. The bot ends up holding a
         position on the wrong side of a move it wasn't built to follow.
       </p>
     </div>
@@ -88,19 +86,17 @@ const APP_URL = "https://trading.onquantex.com";
       <h2>DCA bots</h2>
       <p>
         Short for dollar-cost averaging. The bot buys a fixed amount on a
-        fixed schedule, hourly, daily, whatever you set, no matter what
-        the price happens to be doing that moment. Over enough buys, your
-        average entry price smooths out toward the market's average over
-        that window instead of depending on the one moment you happened to
-        click "buy".
+        fixed schedule (hourly, daily, whatever you set), no matter what
+        the price is doing at that moment. Over enough buys, your average
+        entry price smooths out toward the market's average instead of
+        depending on the one moment you happened to click "buy."
       </p>
       <p>
         <strong>Works best when:</strong> you'd rather not try to time an
         entry at all, and are building a position over weeks or months.
-        <strong>Struggles when:</strong> compared to a single lump-sum buy
-        right before a sustained rally, it will lag behind, averaging in
-        gives up some upside in exchange for not needing to guess the
-        bottom.
+        <strong>Struggles when:</strong> a single lump-sum buy right
+        before a sustained rally will always beat it. Averaging in trades
+        some upside for not needing to guess the bottom.
       </p>
     </div>
   </section>
@@ -109,18 +105,19 @@ const APP_URL = "https://trading.onquantex.com";
     <div class="qx-container qx-prose">
       <h2>Momentum bots</h2>
       <p>
-        This one tries to catch a trend once it's actually confirmed,
-        rather than guessing one is coming. It watches for a signal, a
+        This one waits for a trend to actually confirm itself, rather
+        than guessing one is coming. It watches for a signal: a
         moving-average crossover (a short-term average price crossing
-        above or below a longer-term one) or an RSI reading moving out of
-        overbought/oversold territory, and enters once that signal fires,
-        then exits again once the signal reverses or the move stalls.
+        above or below a longer-term one), or an RSI reading moving out
+        of overbought or oversold territory. It enters once that signal
+        fires, and exits again once the signal reverses or the move
+        stalls.
       </p>
       <p>
         <strong>Works best when:</strong> the market is actually trending,
         clean directional moves with real follow-through.
         <strong>Struggles when:</strong> the market is choppy and
-        indecisive, signals can fire and reverse quickly (a "whipsaw"),
+        indecisive. Signals can fire and reverse quickly (a "whipsaw"),
         catching the bot in and back out for a small loss each time.
       </p>
     </div>

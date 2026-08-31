@@ -13,8 +13,8 @@ const APP_URL = "https://trading.onquantex.com";
       <span class="qx-eyebrow">Security</span>
       <h1>Security boundaries built in, not bolted on</h1>
       <p class="qx-lead">
-        Not a badge or a promise, specific limits that exist in how the
-        system is actually built. Here's what each one actually does.
+        These are limits built into the system, not promises we're
+        asking you to trust. Here's what each one actually does.
       </p>
     </div>
   </section>
@@ -24,12 +24,12 @@ const APP_URL = "https://trading.onquantex.com";
       <h2>The exchange keys can trade. They can't withdraw.</h2>
       <p>
         Every bot, and every spot trade, executes through Quantex's own
-        exchange API keys, and those keys are generated with read and
-        trade permissions only. Withdrawal permission is never granted on
-        them, not disabled after the fact, never enabled in the first
-        place. Even if those keys were somehow exposed, they physically
-        can't move funds off the exchange, the exchange itself would
-        refuse the request.
+        exchange API keys. Those keys are generated with read and trade
+        permissions only. Withdrawal permission is never granted on them:
+        not disabled after the fact, never enabled in the first place.
+        Even if those keys were somehow exposed, they physically couldn't
+        move funds off the exchange. The exchange itself would refuse the
+        request.
       </p>
     </div>
   </section>
@@ -41,8 +41,9 @@ const APP_URL = "https://trading.onquantex.com";
         Getting your identity verified doesn't put withdrawals on
         autopilot. Every withdrawal request, regardless of size, sits in a
         review queue and needs a manual approval before it's ever
-        broadcast. There's no threshold under which it skips review, no
-        "trusted account" fast lane, the same check happens every time.
+        broadcast. There's no threshold under which it skips review, and
+        no "trusted account" fast lane. The same check happens every
+        time.
       </p>
       <p>
         Identity verification itself works the same way: submissions are
@@ -58,11 +59,11 @@ const APP_URL = "https://trading.onquantex.com";
       <h2>Your balance is a history, not a number</h2>
       <p>
         Nothing about your balance lives as a single editable field
-        somewhere. Every deposit, withdrawal, fee, and bonus is written as
-        its own append-only ledger entry, your balance is the sum of that
-        history, not a value someone could quietly overwrite. If something
-        ever looks wrong, there's a full trail to check it against, not
-        just a number to take on faith.
+        somewhere. Every deposit, withdrawal, fee, and bonus is written
+        as its own append-only ledger entry. Your balance is the sum of
+        that history, not a value someone could quietly overwrite. If
+        something ever looks wrong, there's a full trail to check it
+        against, not just a number to take on faith.
       </p>
     </div>
   </section>
@@ -75,8 +76,8 @@ const APP_URL = "https://trading.onquantex.com";
         forever, and it doesn't fail quietly either. After a handful of
         failed attempts in a row, it pauses itself automatically, and
         you're notified by email and browser push that it paused and why.
-        A stuck connection turns into a bot doing nothing and telling you,
-        never a bot doing something unexpected.
+        A stuck connection turns into a bot doing nothing and telling you
+        about it, not a bot doing something unexpected.
       </p>
     </div>
   </section>

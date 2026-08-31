@@ -1,0 +1,887 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const APP_URL = "https://trading.onquantex.com";
+
+// Real, freely-licensed (Unsplash) photography, verified to actually
+// resolve and checked visually before use (see chat). Query params trim
+// each to the size actually rendered on the page instead of shipping a
+// full-resolution file the browser then has to downscale.
+//
+// The hero photo is a real photograph (not a generated image) of
+// Giambologna's bronze Neptune, the Fountain of Neptune in Piazza del
+// Nettuno, Bologna, by André Eusébio on Unsplash. Neptune (Roman god of
+// the sea) is the whole brand angle for the About page: an exchange
+// navigating volatile markets the way the god navigates the sea. The
+// underlying photo is used as-is, unedited (no pixels touched) — the
+// noise texture and the Bitcoin stamp below are separate layers stacked
+// on TOP of it in plain CSS, not baked into the image file itself, since
+// actually editing someone else's photograph convincingly needs real
+// photo-editing tooling this project doesn't have.
+const statuePhoto = "https://images.unsplash.com/photo-1743634427797-cda09d4bcca7?w=1000&q=80";
+const laptopImg = "https://images.unsplash.com/photo-1614028674026-a65e31bfd27c?w=900&q=75";
+const cubeImg = "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=900&q=75";
+
+// The curated, deliberately small coin list for the #markets section below
+// (see its own comment for why this is separate from Ticker.astro's list).
+// CoinGecko's "id" is what the API call needs; "symbol"/"name" are just for
+// display. To change which coins show here, add/remove/reorder entries —
+// the id has to be CoinGecko's own id string (check https://api.coingecko.com/api/v3/coins/list
+// if unsure of one), not the ticker symbol.
+const MARKET_COINS = [
+  { id: "bitcoin", symbol: "BTC", name: "Bitcoin" },
+  { id: "ethereum", symbol: "ETH", name: "Ethereum" },
+  { id: "solana", symbol: "SOL", name: "Solana" },
+  { id: "binancecoin", symbol: "BNB", name: "BNB" },
+  { id: "ripple", symbol: "XRP", name: "XRP" },
+  { id: "dogecoin", symbol: "DOGE", name: "Dogecoin" },
+];
+
+const products = [
+  {
+    name: "Spot Trading",
+    blurb: "Buy and sell crypto directly on the order book yourself, at the live market price.",
+  },
+  {
+    name: "Grid Bot",
+    blurb: "Places a ladder of buy and sell orders across a price range and trades the swings automatically.",
+  },
+  {
+    name: "DCA Bot",
+    blurb: "Buys in on a fixed schedule no matter the price, smoothing out your entry cost over time.",
+  },
+  {
+    name: "Momentum Bot",
+    blurb: "Follows a trend once it forms, sizing in as the move builds and stepping aside when it stalls.",
+  },
+];
+---
+
+<BaseLayout
+  title="Crypto Exchange with Automated Trading Bots"
+  description="Quantex is a crypto exchange. Trade spot markets yourself, or deploy a Grid, DCA, or Momentum bot to trade for you around the clock."
+>
+  <!-- ── Hero ─────────────────────────────────────────────────────────── -->
+  <!-- Full-bleed hero: the photo fills the ENTIRE section edge-to-edge (not
+       a bounded side panel), and the copy sits directly on top of it, on a
+       dark gradient that fades the left side of the photo into the page
+       background so the headline stays readable against the statue/sky
+       behind it.
+
+       This only works because the section is TALL (see --hero min-height
+       below) relative to how wide it is. object-fit: cover on a WIDE/SHORT
+       box against a PORTRAIT source photo is width-bound — the photo's
+       full width always shows and there is zero room left to crop it
+       sideways, so no object-position value can push Neptune toward one
+       edge (that's a geometry fact, not a CSS mistake — a previous version
+       of this section tried exactly that and hit this wall). Making the
+       box tall enough flips the math to height-bound instead, which opens
+       up real horizontal crop room, and object-position's x-value below
+       can then actually push him toward the right edge. If a future edit
+       ever shrinks the section back down close to ~560px tall, the old
+       smearing-across-the-full-width problem comes back. -->
+  <section class="qx-hero">
+    <img
+      src={statuePhoto}
+      alt="Bronze statue of Neptune holding a trident against a blue sky, the Fountain of Neptune in Bologna"
+      loading="eager"
+    />
+    {/* Grain layer: an inline SVG feTurbulence filter set as a tiled
+        background, blended with mix-blend-mode so it reads as texture on
+        the photo rather than a flat gray box on top of it. Raise
+        .qx-hero-noise's opacity below for heavier grain, lower it for
+        subtler. */}
+    <div class="qx-hero-noise"></div>
+    {/* The dark gradient the headline sits on top of — see .qx-hero-scrim
+        below for the stop percentages that control how far across the
+        photo it reaches before fading out. */}
+    <div class="qx-hero-scrim"></div>
+    <div class="qx-container">
+      <div class="qx-hero-copy">
+        <span class="qx-eyebrow">Crypto Exchange</span>
+        <h1>Trade crypto. Or let a bot do it.</h1>
+        <p class="qx-hero-sub">
+          Quantex is a crypto exchange. Trade the spot market yourself, or
+          deploy a Grid, DCA, or Momentum bot and let it trade for you,
+          around the clock.
+        </p>
+        <div class="qx-hero-cta">
+          <a class="qx-btn-primary qx-btn-lg" href={`${APP_URL}/signup`}>Trade Now</a>
+          <a class="qx-btn-secondary qx-btn-lg" href="#products">Explore the bots</a>
+        </div>
+      </div>
+    </div>
+    <p class="qx-photo-credit">Photo by André Eusébio, via Unsplash</p>
+  </section>
+
+  <!-- ── Welcome bonus ────────────────────────────────────────────────── -->
+  <!-- Copy-only marketing section for now — nothing on the backend
+       actually credits a deposit with a bonus yet, this is just the
+       promo copy/graphic. If this becomes a real, working bonus later it
+       needs backend support (a promo/bonus ledger entry, eligibility
+       rules, an amount that isn't hardcoded on this static page) before
+       the claim below is actually true.
+       The gift-pack graphic is a hand-authored flat-vector SVG (see its
+       own file header for why), matching the style of the hero's
+       statue-hero.svg asset, not a stock photo. -->
+  <section class="qx-bonus">
+    <div class="qx-container qx-bonus-inner">
+      <div class="qx-bonus-copy">
+        <span class="qx-eyebrow">Welcome Bonus</span>
+        <h2>Get up to 100 USDT on your first deposit</h2>
+        <p>
+          Fund your account for the first time and we'll match part of it
+          in bonus USDT, credited straight to your balance.
+        </p>
+        <a class="qx-btn-primary qx-btn-lg" href={`${APP_URL}/signup`}>Claim your bonus</a>
+      </div>
+      <div class="qx-bonus-media">
+        <img
+          src="/reward-gift.svg"
+          alt="A wrapped gift box with floating coin tokens, representing a welcome deposit bonus"
+          loading="lazy"
+          width="460"
+          height="420"
+        />
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Trust strip ──────────────────────────────────────────────────── -->
+  <section class="qx-strip">
+    <div class="qx-container qx-strip-inner">
+      <div><strong>Spot + 3 Bots</strong><span>trade manually or automated</span></div>
+      <div><strong>24/7</strong><span>bots never sleep</span></div>
+      <div><strong>Trade-only</strong><span>API keys, never withdrawal</span></div>
+      <div><strong>KYC-gated</strong><span>withdrawals</span></div>
+    </div>
+  </section>
+
+  <!-- ── Markets ──────────────────────────────────────────────────────── -->
+  <!-- id="markets" is what the Nav's "Markets" link (Nav.astro) points to
+       — it used to point at #products (the bot-types grid below), which
+       wasn't actually prices, hence this section.
+
+       Deliberately a SMALL, curated list ("a select few," not the header
+       ticker's full lineup) shown as cards instead of a scrolling strip —
+       Ticker.astro keeps running site-wide under the header unchanged;
+       this is a bigger, dedicated display, not a replacement for it. It
+       also runs its OWN fetch below rather than reusing Ticker's: this
+       section only exists on the homepage while the ticker renders via
+       BaseLayout.astro on every page, so sharing one script between a
+       site-wide component and a homepage-only section would couple them
+       for no real benefit.
+
+       Same live-data pattern as the ticker: the cards render with static
+       "···" placeholders first (works with JS disabled, and before the
+       fetch below resolves), then the <script> after this section fetches
+       real numbers from CoinGecko's free public API and fills them in. If
+       that fetch fails (ad blocker, offline, rate limit) the placeholders
+       are simply left as-is rather than showing anything false. -->
+  <section id="markets" class="qx-section">
+    <div class="qx-container">
+      <h2>Live markets</h2>
+      <p class="qx-section-sub">A few of the pairs you can trade the moment you deposit.</p>
+      <div class="qx-market-grid">
+        {MARKET_COINS.map((coin) => (
+          <div class="qx-market-card" data-coin={coin.id}>
+            <div class="qx-market-card-head">
+              {/* No src until the script below fills one in from
+                  CoinGecko's own response — never a hardcoded/guessed
+                  image URL, same "genuinely live, not fabricated"
+                  reasoning as the price/change values. Renders as a
+                  plain background-filled circle (see .qx-market-logo)
+                  until then, rather than a broken-image icon. */}
+              <img class="qx-market-logo" alt={`${coin.name} logo`} width="28" height="28" />
+              <div class="qx-market-labels">
+                <span class="qx-market-symbol">{coin.symbol}</span>
+                <span class="qx-market-name">{coin.name}</span>
+              </div>
+            </div>
+            <span class="qx-market-price">···</span>
+            <span class="qx-market-change">···</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Mirrors Ticker.astro's fetch/update logic (see that file for the
+    // reasoning) but scoped to this page's own .qx-market-card elements
+    // instead of the ticker's — the two are intentionally independent
+    // fetches, see the markup comment above.
+    //
+    // Uses /coins/markets rather than /simple/price (which is what
+    // Ticker.astro calls) because it returns each coin's own logo URL
+    // (the "image" field, CoinGecko's own hosted icon) in the SAME
+    // response as the price/change data — one fetch covers everything
+    // this section needs instead of two.
+    const MARKET_IDS = ["bitcoin", "ethereum", "solana", "binancecoin", "ripple", "dogecoin"];
+
+    fetch(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${MARKET_IDS.join(",")}`
+    )
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((coins: any[]) => {
+        const byId = new Map(coins.map((c) => [c.id, c]));
+        document.querySelectorAll<HTMLElement>(".qx-market-card").forEach((card) => {
+          const coin = byId.get(card.dataset.coin ?? "");
+          if (!coin) return;
+          const logoEl = card.querySelector<HTMLImageElement>(".qx-market-logo");
+          const priceEl = card.querySelector(".qx-market-price");
+          const changeEl = card.querySelector(".qx-market-change");
+          if (logoEl && coin.image) {
+            logoEl.src = coin.image;
+            // If the icon URL 404s for some reason, hide the <img> rather
+            // than leave a browser broken-image glyph sitting in the
+            // card — the circular background from .qx-market-logo is
+            // still there underneath, so it just reads as an empty
+            // avatar instead of an error.
+            logoEl.addEventListener(
+              "error",
+              () => {
+                logoEl.style.visibility = "hidden";
+              },
+              { once: true }
+            );
+          }
+          if (!priceEl || !changeEl) return;
+          // Sub-$1 coins (e.g. DOGE) need more decimal places to show a
+          // meaningful number than a whole BTC/ETH price does — toFixed(2)
+          // on a $0.12 coin would still work, but toPrecision(3) reads
+          // better for small values generally.
+          const price = coin.current_price >= 1 ? coin.current_price.toFixed(2) : coin.current_price.toPrecision(3);
+          const change = coin.price_change_percentage_24h ?? 0;
+          const sign = change >= 0 ? "+" : "";
+          priceEl.textContent = `$${price}`;
+          changeEl.textContent = `${sign}${change.toFixed(1)}%`;
+          changeEl.classList.add(change >= 0 ? "qx-gain" : "qx-loss");
+        });
+      })
+      .catch(() => {
+        // Network blocked or rate-limited: leave the static "···" placeholders.
+      });
+  </script>
+
+  <!-- ── Products ─────────────────────────────────────────────────────── -->
+  <section id="products" class="qx-section">
+    <div class="qx-container">
+      <h2>Trade your way</h2>
+      <p class="qx-section-sub">One account, one balance. Work the market yourself, or hand it to a bot.</p>
+      <div class="qx-bot-grid">
+        {products.map((item) => (
+          <div class="qx-bot-card">
+            <h3>{item.name}</h3>
+            <p>{item.blurb}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How it works ─────────────────────────────────────────────────── -->
+  <!-- Same full-bleed-photo-plus-gradient treatment as the hero: the photo
+       fills the whole section, a side gradient darkens the text half so
+       it stays readable, and the copy panel sits directly on top of the
+       image instead of next to a small thumbnail of it. -->
+  <section id="how-it-works" class="qx-media-section">
+    <img src={laptopImg} alt="Laptop displaying a live trading chart" loading="lazy" />
+    <div class="qx-media-scrim qx-media-scrim-left"></div>
+    <div class="qx-container">
+      <div class="qx-media-copy">
+        <h2>From deposit to your first trade in minutes</h2>
+        <ol class="qx-steps">
+          <li><strong>Deposit crypto</strong><span>Send funds to your Quantex wallet address.</span></li>
+          <li><strong>Trade or automate</strong><span>Buy and sell on the spot market yourself, or launch a bot.</span></li>
+          <li><strong>Let it run</strong><span>A bot executes around the clock from the master account.</span></li>
+          <li><strong>Withdraw</strong><span>Verify your identity once, then withdraw anytime.</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Security ─────────────────────────────────────────────────────── -->
+  <section id="security" class="qx-media-section qx-media-section-reverse">
+    <img src={cubeImg} alt="Abstract render of a secured, distributed network" loading="lazy" />
+    <div class="qx-media-scrim qx-media-scrim-right"></div>
+    <div class="qx-container">
+      <div class="qx-media-copy qx-media-copy-right">
+        <h2>Security boundaries built in, not bolted on</h2>
+        <ul class="qx-security-list">
+          <li>Exchange API keys are read and trade only. Withdrawal permission is never granted.</li>
+          <li>Withdrawals require identity verification before they can be requested at all.</li>
+          <li>Every balance change is recorded as an append-only ledger entry, not a number that can just be edited.</li>
+        </ul>
+        <a class="qx-security-more" href="/security">Read the full security page →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Final CTA ────────────────────────────────────────────────────── -->
+  <section class="qx-cta">
+    <div class="qx-container qx-cta-inner">
+      <div>
+        <h2>Ready to trade?</h2>
+        <p>Create an account, deposit crypto, and place your first trade or launch your first bot today.</p>
+        <a class="qx-btn-primary qx-btn-lg" href={`${APP_URL}/signup`}>Trade Now</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* Section height is the load-bearing number here (see the markup
+     comment above) — it's what turns object-fit: cover from
+     width-bound (zero horizontal crop room) into height-bound (real
+     horizontal crop room, so the object-position x-value below actually
+     does something). Raise it for an even more dramatic banner-style
+     hero; don't drop it back down near ~560px or the crop math breaks
+     and Neptune goes back to smearing across the full width. */
+  .qx-hero {
+    position: relative;
+    min-height: 780px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+  .qx-hero > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Both values are 0-100%, same idea as object-position always works:
+       x is how far toward the RIGHT edge of the photo the crop is
+       anchored (0% = pin the photo's left edge, 100% = pin its right
+       edge) — raise it to push Neptune further right, lower it to bring
+       him back toward center. y does the same vertically (lower reveals
+       more of his head/the sky above him, higher reveals more of the
+       pedestal below). These starting numbers are a best guess, not
+       screenshot-verified against the live photo — check the rendered
+       page after any change and nudge both until he's framed the way you
+       want. */
+    object-position: 74% 14%;
+  }
+  /* Grain: a tiled SVG feTurbulence filter, screen-blended over the photo.
+     This is a CSS-only texture (no image file), so "heavier grain" is
+     just a bigger opacity number below, nothing to regenerate. */
+  .qx-hero-noise {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    opacity: 0.35;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-size: 180px 180px;
+  }
+  /* The dark gradient the headline reads on top of. Built from
+     --cream-deep — this site's dark page background despite the "cream"
+     name (see tokens.css) — so the fade blends into the rest of the page
+     instead of looking like a tinted box dropped onto the photo. Three
+     stops (rather than a flat two-stop fade) give a longer, softer taper:
+     fully opaque near the left edge so text always has a solid dark
+     surface under it, then increasingly transparent until it's fully
+     see-through by 74% across, which is roughly where Neptune should
+     read clearly. If the headline ever feels hard to read, push the
+     stop percentages further right (more opaque coverage); if he feels
+     too washed out, pull them left instead. */
+  .qx-hero-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(
+      100deg,
+      var(--cream-deep) 0%,
+      color-mix(in srgb, var(--cream-deep) 92%, transparent) 32%,
+      color-mix(in srgb, var(--cream-deep) 55%, transparent) 52%,
+      transparent 74%
+    );
+  }
+  .qx-hero .qx-container {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+  }
+  .qx-hero-copy {
+    max-width: 560px;
+    padding: var(--space-48) 0;
+  }
+  .qx-photo-credit {
+    position: absolute;
+    bottom: var(--space-10);
+    right: var(--space-12);
+    z-index: 2;
+    font-size: 11px;
+    color: var(--on-accent);
+    opacity: 0.65;
+  }
+  .qx-eyebrow {
+    display: inline-block;
+    font-family: var(--font-data);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal-base);
+    background: var(--teal-pale);
+    padding: var(--space-3) var(--space-8);
+    border-radius: var(--radius-full);
+    margin-bottom: var(--space-16);
+  }
+  .qx-hero-copy h1 {
+    font-size: clamp(36px, 5vw, 56px);
+    color: var(--ink-base);
+  }
+  .qx-hero-sub {
+    margin-top: var(--space-16);
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 46ch;
+  }
+  .qx-hero-cta {
+    margin-top: var(--space-24);
+    display: flex;
+    gap: var(--space-10);
+    flex-wrap: wrap;
+  }
+  .qx-btn-lg {
+    padding: var(--space-10) var(--space-24);
+    font-size: 16px;
+  }
+
+  /* Simple two-column promo band: copy on the left, the gift-box graphic
+     on the right, both centered vertically. Unlike the hero this is a
+     plain flow section (not full-bleed/overlaid) since the graphic is a
+     self-contained illustration on its own transparent background, not a
+     photo that needs a crop/gradient treatment to sit next to text. */
+  .qx-bonus {
+    padding: var(--space-48) 0;
+    border-top: 1px solid var(--cream-line);
+    border-bottom: 1px solid var(--cream-line);
+    background: var(--cream-deep);
+  }
+  .qx-bonus-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-32);
+  }
+  .qx-bonus-copy {
+    flex: 1 1 420px;
+    max-width: 520px;
+  }
+  .qx-bonus-copy h2 {
+    margin-top: var(--space-8);
+    font-size: 32px;
+    color: var(--ink-base);
+    text-align: left;
+  }
+  .qx-bonus-copy p {
+    margin-top: var(--space-12);
+    font-size: 16px;
+    color: var(--ink-soft);
+    max-width: 46ch;
+  }
+  .qx-bonus-copy .qx-btn-primary {
+    margin-top: var(--space-24);
+  }
+  .qx-bonus-media {
+    flex: 1 1 320px;
+    display: flex;
+    justify-content: center;
+  }
+  .qx-bonus-media img {
+    width: 100%;
+    /* Caps how big the gift graphic gets on wide screens — raise this if
+       you want it more prominent, lower it if it starts crowding the
+       copy column. */
+    max-width: 380px;
+    height: auto;
+  }
+
+  .qx-strip {
+    border-top: 1px solid var(--cream-line);
+    border-bottom: 1px solid var(--cream-line);
+    background: var(--cream-deep);
+  }
+  .qx-strip-inner {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-16);
+    padding: var(--space-24) 0;
+    text-align: center;
+  }
+  .qx-strip-inner div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .qx-strip-inner strong {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--teal-base);
+  }
+  .qx-strip-inner span {
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .qx-section {
+    padding: var(--space-48) 0;
+  }
+  /* Shared by both the Markets and Products sections below (both use
+     class="qx-section" and an h2 + .qx-section-sub pair) — only their
+     grid/card content differs, styled separately further down. */
+  .qx-section h2 {
+    font-size: 32px;
+    color: var(--ink-base);
+    text-align: center;
+  }
+  .qx-section-sub {
+    margin-top: var(--space-8);
+    text-align: center;
+    color: var(--ink-soft);
+    max-width: 56ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .qx-market-grid {
+    margin-top: var(--space-32);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-16);
+  }
+  .qx-market-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    background: var(--cream-base);
+    border: 1px solid var(--cream-line);
+    border-radius: var(--radius-xl);
+    padding: var(--space-24);
+  }
+  .qx-market-card-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-10);
+  }
+  /* Filled with a background color from the start (rather than staying
+     transparent) so it reads as a placeholder avatar, not an empty gap,
+     for however long it takes the script above to set a real src — and
+     stays as that same circle underneath if the src ever fails to load. */
+  .qx-market-logo {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-full);
+    background: var(--cream-deep);
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .qx-market-labels {
+    display: flex;
+    flex-direction: column;
+  }
+  .qx-market-symbol {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink-base);
+  }
+  .qx-market-name {
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  /* Price/change render as "data" (the same monospace font the header
+     ticker and price displays elsewhere on the site use) rather than the
+     body font, so they read as live numbers rather than prose. */
+  .qx-market-price {
+    font-family: var(--font-data);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ink-base);
+  }
+  .qx-market-change {
+    font-family: var(--font-data);
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .qx-market-change.qx-gain {
+    color: var(--gain);
+  }
+  .qx-market-change.qx-loss {
+    color: var(--loss);
+  }
+
+  .qx-bot-grid {
+    margin-top: var(--space-32);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-16);
+  }
+  .qx-bot-card {
+    background: var(--cream-base);
+    border: 1px solid var(--cream-line);
+    border-radius: var(--radius-xl);
+    padding: var(--space-24);
+  }
+  .qx-bot-card h3 {
+    font-size: 18px;
+    color: var(--teal-base);
+  }
+  .qx-bot-card p {
+    margin-top: var(--space-8);
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+
+  /* Shared full-bleed-photo-with-gradient-text pattern for "How it works"
+     and "Security" — same idea as .qx-hero above, just without the badges.
+     The image is a plain flow child sized to fill the section (not a CSS
+     background) so it stays a real <img> for lazy-loading/alt text. */
+  .qx-media-section {
+    position: relative;
+    min-height: 460px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+  .qx-media-section > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+  .qx-media-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  .qx-media-scrim-left {
+    background: linear-gradient(
+      100deg,
+      var(--cream-deep) 0%,
+      color-mix(in srgb, var(--cream-deep) 85%, transparent) 34%,
+      transparent 75%
+    );
+  }
+  .qx-media-scrim-right {
+    background: linear-gradient(
+      260deg,
+      var(--cream-base) 0%,
+      color-mix(in srgb, var(--cream-base) 85%, transparent) 34%,
+      transparent 75%
+    );
+  }
+  .qx-media-section .qx-container {
+    position: relative;
+    z-index: 1;
+  }
+  .qx-media-copy {
+    max-width: 480px;
+    padding: var(--space-32) 0;
+  }
+  .qx-media-copy-right {
+    margin-left: auto;
+  }
+  .qx-media-copy h2 {
+    text-align: left;
+    margin-bottom: var(--space-16);
+  }
+
+  .qx-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    counter-reset: step;
+  }
+  .qx-steps li {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-left: var(--space-32);
+    position: relative;
+    counter-increment: step;
+  }
+  .qx-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-full);
+    background: var(--teal-base);
+    color: var(--on-accent);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .qx-steps strong {
+    font-size: 16px;
+    color: var(--ink-base);
+  }
+  .qx-steps span {
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+
+  .qx-security-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+  .qx-security-list li {
+    padding-left: var(--space-24);
+    position: relative;
+    color: var(--ink-soft);
+    font-size: 15px;
+  }
+  .qx-security-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--teal-base);
+  }
+  .qx-security-more {
+    display: inline-block;
+    margin-top: var(--space-20);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--teal-base);
+  }
+  .qx-security-more:hover {
+    text-decoration: underline;
+  }
+
+  .qx-cta {
+    padding: var(--space-48) 0 var(--space-32);
+  }
+  .qx-cta-inner {
+    background: var(--teal-deep);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-48);
+    text-align: center;
+  }
+  .qx-cta-inner h2 {
+    color: var(--on-accent);
+  }
+  .qx-cta-inner p {
+    margin-top: var(--space-8);
+    color: var(--teal-sage);
+    max-width: 48ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .qx-cta-inner .qx-btn-primary {
+    margin-top: var(--space-16);
+  }
+
+  /* ── Mobile ───────────────────────────────────────────────────────────
+     Two breakpoints: 860px is where every two-column layout on this page
+     (hero, the two media sections, the bot grid) stacks to one column;
+     480px is a second pass for phones specifically, where even a 2-column
+     grid is too tight and section padding needs to shrink. Test by
+     resizing a real browser below each width, not just by reading this. */
+  @media (max-width: 860px) {
+    .qx-hero {
+      /* Still full-bleed, just shorter — there's no two-column collapse
+         to do here any more since the hero was never a flex row, only a
+         photo with text overlaid on top of it. */
+      min-height: 620px;
+    }
+    .qx-hero-copy {
+      max-width: none;
+      padding: var(--space-32) 0;
+    }
+    .qx-bonus-inner {
+      flex-direction: column;
+      text-align: center;
+    }
+    .qx-bonus-copy {
+      max-width: none;
+    }
+    .qx-bonus-copy p {
+      margin-left: auto;
+      margin-right: auto;
+    }
+    /* A left-to-right gradient reads as a fade at desktop width but just
+       looks like a stray diagonal line once the media sections' text
+       panel goes full-width below its photo, so mobile switches those two
+       (and the hero, same reasoning) to a flat top-to-bottom fade
+       instead. */
+    .qx-hero-scrim,
+    .qx-media-scrim-left,
+    .qx-media-scrim-right {
+      background: linear-gradient(
+        180deg,
+        var(--cream-base) 0%,
+        color-mix(in srgb, var(--cream-base) 80%, transparent) 45%,
+        color-mix(in srgb, var(--cream-base) 55%, transparent) 100%
+      );
+    }
+    .qx-media-copy,
+    .qx-media-copy-right {
+      max-width: none;
+      margin-left: 0;
+    }
+    .qx-bot-grid,
+    .qx-market-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .qx-strip-inner {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .qx-cta-inner {
+      padding: var(--space-32) var(--space-24);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .qx-container {
+      padding: 0 var(--space-16);
+    }
+    .qx-hero-copy h1 {
+      font-size: 30px;
+    }
+    .qx-hero-cta {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .qx-hero-cta a {
+      text-align: center;
+    }
+    .qx-bot-grid,
+    .qx-market-grid,
+    .qx-strip-inner {
+      grid-template-columns: 1fr;
+    }
+    .qx-media-section {
+      min-height: 360px;
+    }
+    /* .qx-hero deliberately excluded from this: it's full-bleed (the img
+       is position: absolute; inset: 0 against the section), so giving the
+       section its own padding here would leave gaps around the photo
+       instead of shrinking it — .qx-hero uses min-height instead, right
+       below. */
+    .qx-section {
+      padding: var(--space-32) 0;
+    }
+    .qx-hero {
+      min-height: 480px;
+    }
+  }
+</style>

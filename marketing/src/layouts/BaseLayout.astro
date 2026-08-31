@@ -1,0 +1,77 @@
+---
+// Shared page shell: <head> (title/meta/OG tags for SEO — the whole reason
+// this site exists as a separate static-built project instead of routes in
+// the React SPA, see astro.config.mjs), the Nav, a <slot/> for the page's
+// own content, and the Footer.
+//
+// Every page under src/pages/ should wrap its content in this layout and
+// pass at least `title` + `description` as props — those two are what show
+// up as the blue link + gray snippet on a Google results page, so they're
+// not optional decoration, they're the actual product of this file.
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import Ticker from "../components/Ticker.astro";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+  // Absolute URL to a 1200x630 image for social-share link previews
+  // (Twitter/X, Telegram, Discord, etc.). Optional — falls back to a
+  // generic OG image if a page doesn't pass one. To change the site-wide
+  // default, replace /public/og-default.svg.
+  ogImage?: string;
+}
+
+const {
+  title,
+  description,
+  ogImage = "/og-default.svg",
+} = Astro.props;
+
+// Astro.site comes from the `site` value in astro.config.mjs
+// (https://onquantex.com) — Astro.url.pathname is the current page's path.
+// Combined, this builds the one canonical, absolute URL search engines are
+// told is "the real address" of this exact page, which matters once the
+// same content is ever reachable two ways (e.g. with/without a trailing
+// slash) — canonical tells Google which one to index.
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const absoluteOgImage = new URL(ogImage, Astro.site);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Site is dark-only (see tokens.css) — this tells the browser to
+         render its own UI (scrollbars, form control chrome) dark too,
+         instead of a jarring light scrollbar next to a dark page. -->
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonicalURL} />
+
+    <title>{title} · Quantex</title>
+    <meta name="description" content={description} />
+
+    <!-- Open Graph — controls the preview card when this URL is pasted into
+         Slack/Discord/Telegram/X etc. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:title" content={`${title} · Quantex`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={absoluteOgImage} />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={`${title} · Quantex`} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={absoluteOgImage} />
+  </head>
+  <body>
+    <Nav />
+    <Ticker />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

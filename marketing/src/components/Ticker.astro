@@ -1,0 +1,154 @@
+---
+// Scrolling market ticker, the kind of "always-on market data" strip every
+// real exchange marketing site runs under its header. Renders a static
+// symbol list first (so it's never blank, and crawlers/no-JS visitors still
+// see real coin names), then a plain <script> below fetches real prices
+// from CoinGecko's public API client-side and swaps the numbers in. This
+// is a genuinely live feed, not a fabricated one — if the fetch fails (ad
+// blocker, offline, rate limit) it silently keeps the static symbol-only
+// list rather than showing anything false.
+const COINS = [
+  { id: "bitcoin", symbol: "BTC" },
+  { id: "ethereum", symbol: "ETH" },
+  { id: "solana", symbol: "SOL" },
+  { id: "ripple", symbol: "XRP" },
+  { id: "binancecoin", symbol: "BNB" },
+  { id: "dogecoin", symbol: "DOGE" },
+  { id: "cardano", symbol: "ADA" },
+  { id: "toncoin", symbol: "TON" },
+];
+---
+
+<div class="qx-ticker" aria-label="Live market prices">
+  <div class="qx-ticker-track" id="qx-ticker-track">
+    {/* Rendered twice back-to-back so the CSS animation can scroll exactly
+        one copy's width and loop with no visible seam. */}
+    {[0, 1].map((copy) => (
+      <div class="qx-ticker-set" aria-hidden={copy === 1 ? "true" : undefined}>
+        {COINS.map((coin) => (
+          <span class="qx-ticker-item" data-coin={coin.id}>
+            {/* No src until the script below fills one in from
+                CoinGecko's own response — see its comment for why. */}
+            <img class="qx-ticker-logo" alt="" width="16" height="16" />
+            <strong>{coin.symbol}</strong>
+            <span class="qx-ticker-price">···</span>
+          </span>
+        ))}
+      </div>
+    ))}
+  </div>
+</div>
+
+<script>
+  // Runs once in the browser after the page loads. Purely progressive
+  // enhancement: the server-rendered symbol list above already works with
+  // JS disabled, this just fills in real numbers when it can.
+  const ids = [
+    "bitcoin", "ethereum", "solana", "ripple",
+    "binancecoin", "dogecoin", "cardano", "toncoin",
+  ];
+
+  // /coins/markets rather than /simple/price: it returns each coin's own
+  // logo URL (the "image" field, CoinGecko's own hosted icon) in the same
+  // response as the price/change data, so one fetch covers the icon too
+  // instead of needing a second request or a hardcoded/guessed image URL.
+  fetch(
+    `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids.join(",")}`
+  )
+    .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    .then((coins: any[]) => {
+      const byId = new Map(coins.map((c) => [c.id, c]));
+      document.querySelectorAll<HTMLElement>("[data-coin]").forEach((el) => {
+        const coin = byId.get(el.dataset.coin ?? "");
+        if (!coin) return;
+        const logoEl = el.querySelector<HTMLImageElement>(".qx-ticker-logo");
+        const priceEl = el.querySelector(".qx-ticker-price");
+        if (logoEl && coin.image) {
+          logoEl.src = coin.image;
+          // A 404'd icon URL hides itself rather than leave a browser
+          // broken-image glyph sitting in the strip.
+          logoEl.addEventListener("error", () => { logoEl.style.visibility = "hidden"; }, { once: true });
+        }
+        if (!priceEl) return;
+        const price = coin.current_price >= 1 ? coin.current_price.toFixed(2) : coin.current_price.toPrecision(3);
+        const change = coin.price_change_percentage_24h ?? 0;
+        const sign = change >= 0 ? "+" : "";
+        priceEl.textContent = `$${price} (${sign}${change.toFixed(1)}%)`;
+        priceEl.classList.add(change >= 0 ? "qx-gain" : "qx-loss");
+      });
+    })
+    .catch(() => {
+      // Network blocked or rate-limited: leave the static "···" placeholders
+      // in place rather than show a broken or misleading number.
+    });
+</script>
+
+<style>
+  .qx-ticker {
+    background: var(--cream-deep);
+    border-bottom: 1px solid var(--cream-line);
+    overflow: hidden;
+    white-space: nowrap;
+    mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  }
+  .qx-ticker-track {
+    display: inline-flex;
+    animation: qx-ticker-scroll 32s linear infinite;
+  }
+  .qx-ticker-set {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+  .qx-ticker-item {
+    display: inline-flex;
+    /* center rather than baseline now that there's an icon in the mix —
+       baseline made sense for text-only content, but an <img> has no
+       real baseline of its own, so it looked misaligned next to the
+       symbol/price text once the logo was added. */
+    align-items: center;
+    gap: var(--space-6);
+    padding: var(--space-8) var(--space-16);
+    font-family: var(--font-data);
+    font-size: 13px;
+    color: var(--ink-soft);
+    border-right: 1px solid var(--cream-line);
+  }
+  /* Filled with a background color from the start so it reads as a
+     placeholder avatar (not an empty gap) until the script above sets a
+     real src, and stays as that same circle underneath if the src ever
+     fails to load. */
+  .qx-ticker-logo {
+    width: 16px;
+    height: 16px;
+    border-radius: var(--radius-full);
+    background: var(--cream-line);
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .qx-ticker-item strong {
+    color: var(--ink-base);
+    font-weight: 600;
+  }
+  .qx-ticker-price.qx-gain {
+    color: var(--gain);
+  }
+  .qx-ticker-price.qx-loss {
+    color: var(--loss);
+  }
+  @keyframes qx-ticker-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      /* Exactly one set's width, since two identical sets are rendered
+         back-to-back above — this is what makes the loop seamless. */
+      transform: translateX(-50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .qx-ticker-track {
+      animation: none;
+      overflow-x: auto;
+    }
+  }
+</style>

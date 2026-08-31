@@ -1,0 +1,8 @@
+# Everything on this site is meant to be crawled — that's the entire point
+# of it existing as a separate, statically-rendered site (see
+# astro.config.mjs). Points crawlers at the auto-generated sitemap so new
+# pages (e.g. new blog posts) get discovered without a manual resubmission.
+User-agent: *
+Allow: /
+
+Sitemap: https://onquantex.com/sitemap-index.xml

@@ -1,0 +1,63 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection, render } from "astro:content";
+
+// Static-generates one real .html file per post at build time (see
+// astro.config.mjs's header comment on why that matters for SEO) — this
+// isn't a catch-all route resolved at request time, there is no request
+// time on a static site.
+export async function getStaticPaths() {
+  const posts = await getCollection("blog");
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+});
+---
+
+<BaseLayout title={post.data.title} description={post.data.description}>
+  <article class="qx-section">
+    <div class="qx-container qx-prose">
+      <a href="/blog" class="qx-back">&larr; Blog</a>
+      <time datetime={post.data.publishDate.toISOString()} class="qx-post-date">
+        {dateFormatter.format(post.data.publishDate)}
+      </time>
+      <h1>{post.data.title}</h1>
+      <Content />
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .qx-section {
+    padding: var(--space-48) 0;
+  }
+  .qx-back {
+    display: inline-block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--teal-base);
+    margin-bottom: var(--space-24);
+  }
+  .qx-post-date {
+    display: block;
+    font-family: var(--font-data);
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: var(--space-8);
+  }
+  .qx-prose h1 {
+    font-size: 34px;
+    color: var(--ink-base);
+    margin-bottom: var(--space-24);
+  }
+</style>

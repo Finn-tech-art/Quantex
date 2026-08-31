@@ -1,0 +1,164 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const APP_URL = "https://trading.onquantex.com";
+---
+
+<BaseLayout
+  title="Security"
+  description="How Quantex actually protects your account: trade-only API keys, manual withdrawal approval, an immutable ledger, and bots that fail safe."
+>
+  <section class="qx-sec-hero">
+    <div class="qx-container">
+      <span class="qx-eyebrow">Security</span>
+      <h1>Security boundaries built in, not bolted on</h1>
+      <p class="qx-lead">
+        Not a badge or a promise, specific limits that exist in how the
+        system is actually built. Here's what each one actually does.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>The exchange keys can trade. They can't withdraw.</h2>
+      <p>
+        Every bot, and every spot trade, executes through Quantex's own
+        exchange API keys, and those keys are generated with read and
+        trade permissions only. Withdrawal permission is never granted on
+        them, not disabled after the fact, never enabled in the first
+        place. Even if those keys were somehow exposed, they physically
+        can't move funds off the exchange, the exchange itself would
+        refuse the request.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>Withdrawals need a human, every single time</h2>
+      <p>
+        Getting your identity verified doesn't put withdrawals on
+        autopilot. Every withdrawal request, regardless of size, sits in a
+        review queue and needs a manual approval before it's ever
+        broadcast. There's no threshold under which it skips review, no
+        "trusted account" fast lane, the same check happens every time.
+      </p>
+      <p>
+        Identity verification itself works the same way: submissions are
+        reviewed by a person, not an automated pass/fail, and every
+        decision (approved or rejected) is logged against who reviewed it
+        and when.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>Your balance is a history, not a number</h2>
+      <p>
+        Nothing about your balance lives as a single editable field
+        somewhere. Every deposit, withdrawal, fee, and bonus is written as
+        its own append-only ledger entry, your balance is the sum of that
+        history, not a value someone could quietly overwrite. If something
+        ever looks wrong, there's a full trail to check it against, not
+        just a number to take on faith.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>Bots fail safe, not silent</h2>
+      <p>
+        If a bot can't reach the exchange, it doesn't sit there retrying
+        forever, and it doesn't fail quietly either. After a handful of
+        failed attempts in a row, it pauses itself automatically, and
+        you're notified by email and browser push that it paused and why.
+        A stuck connection turns into a bot doing nothing and telling you,
+        never a bot doing something unexpected.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-cta">
+    <div class="qx-container qx-cta-inner">
+      <div>
+        <h2>Ready to trade?</h2>
+        <p>Create an account, deposit crypto, and put these limits to work for you.</p>
+        <a class="qx-btn-primary qx-btn-lg" href={`${APP_URL}/signup`}>Trade Now</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .qx-sec-hero {
+    padding: var(--space-48) 0 var(--space-24);
+  }
+  .qx-eyebrow {
+    display: inline-block;
+    font-family: var(--font-data);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal-base);
+    background: var(--teal-pale);
+    padding: var(--space-3) var(--space-8);
+    border-radius: var(--radius-full);
+    margin-bottom: var(--space-16);
+  }
+  .qx-sec-hero h1 {
+    font-size: clamp(32px, 4.5vw, 48px);
+    color: var(--ink-base);
+    max-width: 22ch;
+  }
+  .qx-lead {
+    margin-top: var(--space-16);
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 56ch;
+  }
+
+  .qx-section {
+    padding: var(--space-48) 0;
+  }
+  .qx-section-alt {
+    background: var(--cream-deep);
+  }
+
+  .qx-cta {
+    padding: var(--space-48) 0 var(--space-32);
+  }
+  .qx-cta-inner {
+    background: var(--teal-deep);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-48);
+    text-align: center;
+  }
+  .qx-cta-inner h2 {
+    color: var(--on-accent);
+  }
+  .qx-cta-inner p {
+    margin-top: var(--space-8);
+    color: var(--teal-sage);
+    max-width: 48ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .qx-cta-inner .qx-btn-primary {
+    margin-top: var(--space-16);
+  }
+
+  @media (max-width: 480px) {
+    .qx-container {
+      padding: 0 var(--space-16);
+    }
+    .qx-section {
+      padding: var(--space-32) 0;
+    }
+    .qx-cta-inner {
+      padding: var(--space-32) var(--space-24);
+    }
+  }
+</style>

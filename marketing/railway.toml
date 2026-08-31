@@ -1,0 +1,27 @@
+# Railway deployment config for the marketing/public site (Astro, static
+# output — see astro.config.mjs's header comment for why Astro).
+#
+# This repo is a monorepo (frontend + backend + marketing as three separate
+# Railway services from the same GitHub repo). When creating THIS service
+# in Railway's dashboard, set its "Root Directory" to `marketing` — that's
+# what tells Railway to use this file (and this folder's package.json)
+# rather than the other two services'.
+#
+# Same reasoning as frontend/railway.toml: `astro preview` is documented by
+# Astro itself as a local-preview-only tool, not meant for production
+# traffic, so — exactly like the frontend service — the build output
+# (plain static HTML/CSS/JS in dist/) is served by `serve` instead, whose
+# `-s` flag rewrites unknown paths back to index.html. That rewrite isn't
+# needed for SEO (every real page already has its own .html file on disk)
+# but it does mean a stray unmatched path quietly serves the homepage
+# instead of a real 404 — fine for a small marketing site, revisit if that
+# ever matters.
+[build]
+buildCommand = "npm run build"
+
+[deploy]
+# Runs the "start" script from package.json: `serve -s dist -l $PORT`.
+# $PORT is assigned by Railway at runtime — never hardcode a port here.
+startCommand = "npm run start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

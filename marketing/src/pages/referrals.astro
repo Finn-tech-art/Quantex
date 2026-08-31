@@ -1,0 +1,130 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const APP_URL = "https://trading.onquantex.com";
+---
+
+<BaseLayout
+  title="Referral Program"
+  description="Invite people to Quantex with your referral link and earn a reward when they make their first deposit."
+>
+  <section class="qx-ref-hero">
+    <div class="qx-container">
+      <span class="qx-eyebrow">Referral Program</span>
+      <h1>Bring someone in, earn when they deposit</h1>
+      <p class="qx-lead">
+        Every account gets its own referral link. Share it, and when
+        someone signs up through it and makes their first deposit, you
+        earn a reward.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>How it works</h2>
+      <ul>
+        <li>Sign up (or log in) and grab your unique referral code from your account.</li>
+        <li>Share your link however you'd share anything, a message, a post, a group chat.</li>
+        <li>Someone signs up through it and makes their first deposit.</li>
+        <li>You earn a referral reward. The exact terms are shown in your account, not buried in fine print.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>Why it only pays out on a real deposit</h2>
+      <p>
+        A referral only earns a reward once the person you invited
+        actually funds their account, not just at sign-up. That's
+        deliberate: it keeps the program tied to someone genuinely
+        starting to use Quantex rather than an empty account created
+        purely to farm a reward. Referral credits also go through a
+        review step before they're paid out, the same way any other
+        credit to your balance would.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-cta">
+    <div class="qx-container qx-cta-inner">
+      <div>
+        <h2>Get your referral link</h2>
+        <p>Create an account to find your referral code and start sharing it.</p>
+        <a class="qx-btn-primary qx-btn-lg" href={`${APP_URL}/signup`}>Trade Now</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .qx-ref-hero {
+    padding: var(--space-48) 0 var(--space-24);
+  }
+  .qx-eyebrow {
+    display: inline-block;
+    font-family: var(--font-data);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal-base);
+    background: var(--teal-pale);
+    padding: var(--space-3) var(--space-8);
+    border-radius: var(--radius-full);
+    margin-bottom: var(--space-16);
+  }
+  .qx-ref-hero h1 {
+    font-size: clamp(32px, 4.5vw, 48px);
+    color: var(--ink-base);
+    max-width: 20ch;
+  }
+  .qx-lead {
+    margin-top: var(--space-16);
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 56ch;
+  }
+
+  .qx-section {
+    padding: var(--space-48) 0;
+  }
+  .qx-section-alt {
+    background: var(--cream-deep);
+  }
+
+  .qx-cta {
+    padding: var(--space-48) 0 var(--space-32);
+  }
+  .qx-cta-inner {
+    background: var(--teal-deep);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-48);
+    text-align: center;
+  }
+  .qx-cta-inner h2 {
+    color: var(--on-accent);
+  }
+  .qx-cta-inner p {
+    margin-top: var(--space-8);
+    color: var(--teal-sage);
+    max-width: 48ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .qx-cta-inner .qx-btn-primary {
+    margin-top: var(--space-16);
+  }
+
+  @media (max-width: 480px) {
+    .qx-container {
+      padding: 0 var(--space-16);
+    }
+    .qx-section {
+      padding: var(--space-32) 0;
+    }
+    .qx-cta-inner {
+      padding: var(--space-32) var(--space-24);
+    }
+  }
+</style>

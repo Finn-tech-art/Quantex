@@ -1,0 +1,216 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+// Same verified Unsplash photo used on the homepage hero (see index.astro
+// for the licensing note) -- reused here at a smaller size since the
+// About page's whole argument is built around this exact statue.
+const neptunePhoto = "https://images.unsplash.com/photo-1743634427797-cda09d4bcca7?w=900&q=80";
+---
+
+<BaseLayout
+  title="About Quantex"
+  description="Why Quantex is built around Neptune, the Roman god of the sea, and what that has to do with a trading bot."
+>
+  <section class="qx-about-hero">
+    <div class="qx-container qx-about-hero-inner">
+      <div class="qx-about-hero-copy">
+        <span class="qx-eyebrow">Philosophy</span>
+        <h1>Built like a trident</h1>
+        <p class="qx-lead">
+          The Quantex mark is a trident. That wasn't an accident. Neptune,
+          the Roman god of the sea, carries one, and the sea is the oldest
+          metaphor there is for a market: it moves whether you're watching
+          it or not, and it doesn't care whether you're ready.
+        </p>
+      </div>
+      <div class="qx-about-hero-art">
+        <img
+          src={neptunePhoto}
+          alt="Bronze statue of Neptune holding a trident against a blue sky, the Fountain of Neptune in Bologna"
+          loading="eager"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>The sea moves. So does the market.</h2>
+      <p>
+        Nobody tells the tide to slow down, and nobody tells a crypto
+        market to either. Prices swing on volume, on news, on nothing at
+        all. You can fight that, try to read every candle yourself and
+        catch every reversal by hand, or you can build something that
+        holds a position in the current and works it automatically, the
+        way a fisherman doesn't out-swim the sea, he learns its pattern
+        and works with it.
+      </p>
+      <p>
+        That's the whole idea behind Quantex. Deposit crypto, trade the
+        spot market yourself when you want to, and hand the rest to a bot
+        built to hold a position in the current without needing you to
+        watch every wave.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>Three prongs, three strategies</h2>
+      <p>
+        Neptune's trident has three prongs. Quantex ships three bot
+        strategies. That's the whole reason the mark looks the way it
+        does.
+      </p>
+      <div class="qx-trident-grid">
+        <div class="qx-trident-item">
+          <h3>Grid</h3>
+          <p>Works a range, buying low and selling high inside it, over and over, without needing to guess a direction.</p>
+        </div>
+        <div class="qx-trident-item">
+          <h3>DCA</h3>
+          <p>Buys on a schedule no matter what the price is doing, so no single bad entry decides the outcome.</p>
+        </div>
+        <div class="qx-trident-item">
+          <h3>Momentum</h3>
+          <p>Follows a trend once it actually forms, and steps aside the moment it stalls.</p>
+        </div>
+      </div>
+      <p>
+        Spot trading is the fourth option: no bot at all, just you and the
+        order book, for when you'd rather hold the trident yourself.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-cta">
+    <div class="qx-container qx-cta-inner">
+      <div>
+        <h2>Ready to trade?</h2>
+        <p>Create an account, deposit crypto, and pick a strategy, including your own.</p>
+        <a class="qx-btn-primary qx-btn-lg" href="https://trading.onquantex.com/signup">Trade Now</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .qx-about-hero {
+    padding: var(--space-48) 0;
+  }
+  .qx-about-hero-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-32);
+  }
+  .qx-about-hero-copy {
+    flex: 1 1 480px;
+  }
+  .qx-about-hero-art {
+    flex: 1 1 320px;
+  }
+  .qx-about-hero-art img {
+    width: 100%;
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-card);
+  }
+  .qx-eyebrow {
+    display: inline-block;
+    font-family: var(--font-data);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal-base);
+    background: var(--teal-pale);
+    padding: var(--space-3) var(--space-8);
+    border-radius: var(--radius-full);
+    margin-bottom: var(--space-16);
+  }
+  .qx-about-hero-copy h1 {
+    font-size: clamp(32px, 4.5vw, 48px);
+    color: var(--ink-base);
+  }
+  .qx-lead {
+    margin-top: var(--space-16);
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 50ch;
+  }
+
+  .qx-section {
+    padding: var(--space-48) 0;
+  }
+  .qx-section-alt {
+    background: var(--cream-deep);
+  }
+  /* .qx-prose itself (max-width, h2/p sizing) lives in global.css now —
+     shared with the blog, which renders raw markdown output that has no
+     custom classes of its own to hook a page-scoped style onto. */
+
+  .qx-trident-grid {
+    margin: var(--space-24) 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-16);
+  }
+  .qx-trident-item {
+    background: var(--cream-base);
+    border: 1px solid var(--cream-line);
+    border-radius: var(--radius-xl);
+    padding: var(--space-20);
+  }
+  .qx-trident-item h3 {
+    font-size: 17px;
+    color: var(--teal-base);
+    margin-bottom: var(--space-8);
+  }
+  .qx-trident-item p {
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+
+  .qx-cta {
+    padding: var(--space-48) 0 var(--space-32);
+  }
+  .qx-cta-inner {
+    background: var(--teal-deep);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-48);
+    text-align: center;
+  }
+  .qx-cta-inner h2 {
+    color: var(--on-accent);
+  }
+  .qx-cta-inner p {
+    margin-top: var(--space-8);
+    color: var(--teal-sage);
+    max-width: 48ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .qx-cta-inner .qx-btn-primary {
+    margin-top: var(--space-16);
+  }
+
+  @media (max-width: 860px) {
+    .qx-about-hero-inner {
+      flex-direction: column;
+    }
+    .qx-trident-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .qx-container {
+      padding: 0 var(--space-16);
+    }
+    .qx-section {
+      padding: var(--space-32) 0;
+    }
+    .qx-cta-inner {
+      padding: var(--space-32) var(--space-24);
+    }
+  }
+</style>

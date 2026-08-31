@@ -1,0 +1,99 @@
+/* ============================================================================
+   Design tokens — COPIED from frontend/src/index.css, not imported.
+   ============================================================================
+   This is a deliberate copy rather than a shared import: /marketing and
+   /frontend are two separate Astro/Vite projects, each with its own build
+   and its own Railway service (see the two railway.toml files) — there is
+   no workspace/package link between them that an `import` could resolve
+   across. If the palette in frontend/src/index.css ever changes, someone
+   has to come update this file by hand to match.
+
+   This site is DARK BY DEFAULT (and dark-only, no light variant) — most
+   crypto exchanges default to a dark UI, and the user asked for that same
+   feel here. The values below are the exact dark-mode values already
+   defined in frontend/src/index.css's `:root[data-theme="dark"]` block —
+   this is Quantex's OWN established dark palette, the same one the logged-
+   in app already uses, not a copy of any other exchange's specific colors
+   (see the bybit-structure-quantex-colours project note: match the
+   structure/UX patterns of sites like Bybit, never their literal branding).
+   To retune, edit the values below directly — they're not read from
+   anywhere else at build or run time. If this site ever needs a light
+   variant too, copy the light-mode values from frontend/src/index.css's
+   plain `:root` block into a `:root[data-theme="light"]` block here and
+   add a toggle to Nav.astro; nothing else needs to change since every page
+   already reads these same variable names.
+   ============================================================================ */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap");
+
+:root {
+  /* Color — "Cream" family, dark values (page background / surfaces) */
+  --cream-base: #17150F;
+  --cream-deep: #211E17;
+  --cream-line: #332E22;
+
+  /* Color — Teal (brand accent: buttons, links, highlights) */
+  --teal-base: #22A896;
+  --teal-deep: #0F3D37;
+  --teal-sage: #8FAFA4;
+  --teal-pale: #1A3D37;
+
+  /* Color — Ink (text), dark values */
+  --ink-base: #EFE8D8;
+  --ink-soft: #A69C89;
+
+  /* Color — Semantic */
+  --gain: #6EEAB0;
+  --loss: #D97B5C;
+
+  /* Fixed light text/icon color for content sitting on a deliberately-dark
+     accent surface (e.g. text inside a solid --teal-deep hero panel or a
+     --teal-base button). Stays the same warm off-white in both cases
+     because a button surface is always dark regardless of page theme. */
+  --on-accent: #F6F1E6;
+
+  /* Typography — same three-font system as the app: Space Grotesk for
+     headings/display numbers, Inter for body copy, IBM Plex Mono for
+     anything that reads as "data" (prices, tickers). */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-data: 'IBM Plex Mono', monospace;
+
+  /* Corner radius scale — pick whichever step matches the element's size
+     (small chip -> --radius-xs/sm, a card -> --radius-lg/xl, a pill button
+     -> --radius-full). Keeping the same scale as the app is what makes the
+     two sites feel like one product despite being separate codebases. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 20px;
+  --radius-full: 36px;
+
+  /* Spacing scale (base unit 2px, same as the app) — prefer one of these
+     over an arbitrary px value so spacing stays consistent site-wide. */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-10: 20px;
+  --space-11: 22px;
+  --space-16: 32px;
+  --space-20: 40px;
+  --space-24: 48px;
+  --space-32: 64px;
+  --space-48: 96px;
+
+  /* Focus ring — same color-mix-off-brand-teal approach as the app, so a
+     keyboard user tabbing through nav links / buttons sees a consistent
+     glow. Change "40%" to make the ring more/less visible; change the
+     box-shadow spread in global.css to resize it. */
+  --focus-ring: color-mix(in srgb, var(--teal-base) 40%, transparent);
+
+  --shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 2px 16px rgba(0, 0, 0, 0.3);
+}

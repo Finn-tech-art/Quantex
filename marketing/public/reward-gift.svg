@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Decorative graphic for the "welcome bonus" marketing section: a wrapped
+  gift box with a few floating coin tokens and sparkles around it, standing
+  in for "you get a reward on your first deposit" without depicting any
+  real currency or exchange logo.
+
+  Hand-authored flat-vector artwork (not a stock photo), same reasoning as
+  frontend's statue-hero.svg: it carries zero licensing/trademark risk.
+  In particular the coin circles are deliberately generic (a plain "$"
+  glyph, not the real Tether/USDT ring-T logo or any other brand's mark) —
+  the page copy already says "USDT" in text, this graphic doesn't need to
+  repeat that visually and doing so would risk implying an affiliation
+  with Tether that doesn't exist.
+
+  Colors are hardcoded hex values copied from marketing/src/styles/
+  tokens.css rather than referencing CSS custom properties, because this
+  file is loaded as a plain <img src="/reward-gift.svg"> — a standalone
+  SVG loaded that way can't see the page's CSS variables. If tokens.css's
+  palette ever changes, this file has to be updated by hand to match. To
+  retint anything below, edit the relevant fill/stroke hex value directly.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 420">
+  <defs>
+    <!-- Box body: a soft light-gold gradient, same warm off-white family
+         as the "marble" gradient in statue-hero.svg so the two graphics
+         still feel like they belong to the same illustration set. -->
+    <linearGradient id="boxBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0E6CC" />
+      <stop offset="1" stop-color="#DFD0A8" />
+    </linearGradient>
+    <!-- Soft teal glow sitting under the box, standing in for a drop
+         shadow — a flat dark shadow reads poorly on this site's near-
+         black background, so this is a radial glow instead. Raise/lower
+         the "0.35" stop-opacity below to make the glow stronger/fainter. -->
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22A896" stop-opacity="0.35" />
+      <stop offset="1" stop-color="#22A896" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Soft circular badge backdrop, same device as statue-hero.svg's
+       circle behind the bust — keeps the two hero-adjacent graphics on
+       this site visually consistent. -->
+  <circle cx="230" cy="200" r="190" fill="#1A3D37" opacity="0.45" />
+
+  <!-- Glow under the box in place of a drop shadow -->
+  <ellipse cx="230" cy="330" rx="150" ry="40" fill="url(#glow)" />
+
+  <!-- ── Gift box ────────────────────────────────────────────────────── -->
+  <!-- Box base -->
+  <rect x="140" y="220" width="180" height="130" rx="10" fill="url(#boxBody)" />
+  <!-- Front-face shading strip so the box doesn't read as flat -->
+  <rect x="140" y="220" width="180" height="130" rx="10" fill="#17150F" opacity="0.08" />
+  <!-- Lid, slightly wider than the base with a small overhang -->
+  <rect x="128" y="196" width="204" height="32" rx="8" fill="#EEE6D3" />
+  <!-- Vertical ribbon -->
+  <rect x="215" y="196" width="30" height="154" fill="#22A896" />
+  <!-- Horizontal ribbon across the lid only -->
+  <rect x="128" y="204" width="204" height="16" fill="#22A896" />
+
+  <!-- Bow: two teal loops plus a center knot, built the same way as the
+       laurel wreath in statue-hero.svg (rotated ellipses) -->
+  <g fill="#0E6B62">
+    <ellipse cx="205" cy="182" rx="26" ry="16" transform="rotate(-28 205 182)" />
+    <ellipse cx="255" cy="182" rx="26" ry="16" transform="rotate(28 255 182)" />
+  </g>
+  <circle cx="230" cy="188" r="14" fill="#22A896" />
+
+  <!-- ── Floating coin tokens ────────────────────────────────────────── -->
+  <!-- Each token is a plain circle with a generic "$" glyph — no real
+       currency or exchange branding, see file header. Positions/rotation
+       are hand-picked to read as "floating around the box"; nudge the
+       cx/cy pairs to rearrange them. -->
+  <g font-family="Arial, sans-serif" font-weight="700" text-anchor="middle">
+    <circle cx="106" cy="150" r="30" fill="#22A896" stroke="#8FAFA4" stroke-width="3" />
+    <text x="106" y="160" font-size="26" fill="#F6F1E6">$</text>
+
+    <circle cx="356" cy="130" r="24" fill="#1A3D37" stroke="#22A896" stroke-width="3" />
+    <text x="356" y="139" font-size="21" fill="#8FAFA4">$</text>
+
+    <circle cx="352" cy="256" r="20" fill="#22A896" stroke="#8FAFA4" stroke-width="3" opacity="0.9" />
+    <text x="352" y="264" font-size="17" fill="#F6F1E6">$</text>
+  </g>
+
+  <!-- Sparkles: small 4-point stars scattered around the composition for
+       a bit of celebratory glint. Each is one <path> drawn as a diamond
+       cross; scale/opacity vary so they read as different distances. -->
+  <g fill="#6EEAB0">
+    <path d="M150 100 L156 116 L172 122 L156 128 L150 144 L144 128 L128 122 L144 116 Z" opacity="0.9" />
+    <path d="M320 70 L324 82 L336 86 L324 90 L320 102 L316 90 L304 86 L316 82 Z" opacity="0.8" />
+    <path d="M74 250 L78 260 L88 264 L78 268 L74 278 L70 268 L60 264 L70 260 Z" opacity="0.7" />
+    <path d="M270 44 L273 52 L281 55 L273 58 L270 66 L267 58 L259 55 L267 52 Z" opacity="0.6" />
+  </g>
+</svg>

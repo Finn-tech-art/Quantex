@@ -1,0 +1,240 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+// Plain <details>/<summary> accordion, no JavaScript, same "CSS-only
+// interaction" convention as the "Legal"/"More" dropdowns in Nav.astro —
+// this site has no client-side framework running, so every interactive
+// bit is either plain HTML (this, those dropdowns) or a small standalone
+// <script> (Ticker.astro, the #markets section), never a shared JS
+// dependency across components.
+//
+// Grouped into categories, each an array of {q, a} pairs. To add a
+// question, add an object to the relevant category's array below — no
+// markup changes needed, the template maps over these.
+const FAQ_GROUPS = [
+  {
+    category: "Getting started",
+    items: [
+      {
+        q: "How do I get started?",
+        a: "Create an account, deposit crypto to your Quantex wallet address, then trade the spot market yourself or deploy a Grid, DCA, or Momentum bot. See the Learn page for how each option actually works.",
+      },
+      {
+        q: "What can I deposit?",
+        a: "Quantex supports several major networks for crypto deposits. The exact list of supported networks and coins is shown when you go to deposit in your account.",
+      },
+    ],
+  },
+  {
+    category: "Deposits & withdrawals",
+    items: [
+      {
+        q: "Do I need to verify my identity?",
+        a: "Not to deposit or trade. Identity verification (KYC) is required before you can withdraw, it's a one-time step tied to your account, not something you redo per withdrawal.",
+      },
+      {
+        q: "How long do withdrawals take?",
+        a: "Once you're verified, a withdrawal request goes through a review before it's sent, it isn't instant, but it also isn't something that sits unexplained, you'll see its status in your account.",
+      },
+    ],
+  },
+  {
+    category: "Bots & trading",
+    items: [
+      {
+        q: "What's the difference between spot trading and a bot?",
+        a: "Spot trading is you placing orders yourself. A bot is a program placing the same kind of orders on a schedule/rule you configure, running from your account without you needing to watch it. See the Learn page for the full breakdown.",
+      },
+      {
+        q: "How are Grid, DCA, and Momentum bots different?",
+        a: "Grid works a price range, buying dips and selling bounces inside it. DCA buys a fixed amount on a fixed schedule regardless of price. Momentum follows a trend once it's confirmed and steps aside when it stalls. Full detail is on the Learn page.",
+      },
+      {
+        q: "Is there a fee to run a bot?",
+        a: "There's a bot creation fee. The current amount is always shown before you confirm creating a bot, nothing is charged without you seeing the number first.",
+      },
+      {
+        q: "What does the AI actually do?",
+        a: "It reads recent price/volatility for your chosen pair and gives you a bullish/bearish read with its reasoning, plus an optional auto-filled starting configuration. It doesn't trade on its own, you still review and deploy. See the AI Hub page.",
+      },
+    ],
+  },
+  {
+    category: "Security",
+    items: [
+      {
+        q: "Can Quantex withdraw my funds without my permission?",
+        a: "No. The exchange API keys behind Quantex are read and trade only, withdrawal permission is never granted on them, so nothing can move funds out except through the withdrawal flow you initiate yourself.",
+      },
+      {
+        q: "How does Quantex track my balance?",
+        a: "Every balance change is recorded as an append-only ledger entry, a running history rather than a single number that could just be edited.",
+      },
+    ],
+  },
+  {
+    category: "Referrals",
+    items: [
+      {
+        q: "How does the referral program work?",
+        a: "You get a unique referral link. When someone signs up through it and makes their first deposit, you earn a reward. Full detail, including why it only pays out on a real deposit, is on the Referral Program page.",
+      },
+    ],
+  },
+];
+---
+
+<BaseLayout
+  title="Help Center"
+  description="Answers to common questions about deposits, withdrawals, bots, security, and referrals on Quantex."
+>
+  <section class="qx-help-hero">
+    <div class="qx-container">
+      <span class="qx-eyebrow">Help Center</span>
+      <h1>Common questions, answered plainly</h1>
+      <p class="qx-lead">
+        If something's not covered here, the same answers (and more detail)
+        live on the Learn, AI Hub, and Referral Program pages.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-faq">
+      {FAQ_GROUPS.map((group) => (
+        <div class="qx-faq-group">
+          <h2>{group.category}</h2>
+          <div class="qx-faq-list">
+            {group.items.map((item) => (
+              <details class="qx-faq-item">
+                <summary>
+                  <span>{item.q}</span>
+                  <svg
+                    class="qx-faq-chevron"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M2 3.5L5 6.5L8 3.5"
+                      stroke="currentColor"
+                      stroke-width="1.4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </summary>
+                <p>{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .qx-help-hero {
+    padding: var(--space-48) 0 var(--space-24);
+  }
+  .qx-eyebrow {
+    display: inline-block;
+    font-family: var(--font-data);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal-base);
+    background: var(--teal-pale);
+    padding: var(--space-3) var(--space-8);
+    border-radius: var(--radius-full);
+    margin-bottom: var(--space-16);
+  }
+  .qx-help-hero h1 {
+    font-size: clamp(32px, 4.5vw, 48px);
+    color: var(--ink-base);
+    max-width: 22ch;
+  }
+  .qx-lead {
+    margin-top: var(--space-16);
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 56ch;
+  }
+
+  .qx-section {
+    padding: var(--space-16) 0 var(--space-48);
+  }
+  .qx-faq {
+    max-width: 760px;
+  }
+  .qx-faq-group + .qx-faq-group {
+    margin-top: var(--space-32);
+  }
+  .qx-faq-group h2 {
+    font-size: 20px;
+    color: var(--teal-base);
+    margin-bottom: var(--space-8);
+  }
+  .qx-faq-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+  /* Same padding pair the site's own buttons use (.qx-btn-primary in
+     global.css) — 16px vertical, 32px horizontal on this token scale
+     (tokens.css's numbering isn't literal px above --space-8, see that
+     file's comment). Previously this referenced --space-14/--space-12,
+     neither of which exists in tokens.css — an invalid custom property
+     inside a shorthand like `padding: var(--space-14) var(--space-16)`
+     doesn't fall back to anything, it makes the WHOLE declaration
+     invalid, so every FAQ item was silently rendering with zero padding
+     instead of just a slightly-off amount. Only pick values that are
+     actually defined in tokens.css's :root block. */
+  .qx-faq-item {
+    background: var(--cream-base);
+    border: 1px solid var(--cream-line);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-16);
+  }
+  /* Removes the default browser disclosure triangle so the custom chevron
+     below is the only expand/collapse indicator — Firefox respects
+     list-style:none on summary directly, WebKit needs its own
+     pseudo-element hidden too. */
+  .qx-faq-item summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-16);
+    list-style: none;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ink-base);
+    font-size: 15px;
+  }
+  .qx-faq-item summary::-webkit-details-marker {
+    display: none;
+  }
+  .qx-faq-chevron {
+    flex-shrink: 0;
+    color: var(--ink-soft);
+    transition: transform 0.15s ease;
+  }
+  .qx-faq-item[open] .qx-faq-chevron {
+    transform: rotate(180deg);
+  }
+  .qx-faq-item p {
+    margin-top: var(--space-10);
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 480px) {
+    .qx-container {
+      padding: 0 var(--space-16);
+    }
+  }
+</style>

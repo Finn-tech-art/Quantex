@@ -1,0 +1,227 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const APP_URL = "https://trading.onquantex.com";
+---
+
+<BaseLayout
+  title="Learn"
+  description="A plain-English guide to spot trading and how Quantex's Grid, DCA, and Momentum bots actually work under the hood."
+>
+  <section class="qx-learn-hero">
+    <div class="qx-container">
+      <span class="qx-eyebrow">Learn</span>
+      <h1>How trading, and the bots, actually work</h1>
+      <p class="qx-lead">
+        Not a sales pitch, just the mechanics: what happens when you place
+        an order yourself, and what each bot is actually doing with your
+        money while you're not watching.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>Spot trading, in plain English</h2>
+      <p>
+        "Spot" just means you're buying or selling a coin at whatever
+        price the market is at right now, and you own the coin outright
+        the moment the trade fills, no leverage, no expiry date.
+      </p>
+      <p>
+        Every price you see is really two prices: the <strong>bid</strong>
+        (the highest price someone's currently offering to buy at) and the
+        <strong>ask</strong> (the lowest price someone's offering to sell
+        at). The gap between them is the spread. Place a
+        <strong>market order</strong> and you take whatever the best
+        available bid/ask is, right now, guaranteed to fill. Place a
+        <strong>limit order</strong> instead and you name your own price
+        and wait, it only fills if the market comes to you, but it might
+        never fill at all.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>What a trading bot actually does</h2>
+      <p>
+        A bot isn't intelligence and it isn't magic. It's a small program
+        running on a schedule, checking a condition, and placing the same
+        kind of buy/sell order you could place by hand, just without
+        needing you to sit and watch a chart at 3am. Every strategy below
+        boils down to "check something, then act on a rule", the
+        difference between them is what they check and when they act.
+      </p>
+      <p>
+        None of them predict the future or guarantee a profit. A bot
+        working a bad market condition for its strategy will lose money
+        just as a human would, it just does it on a schedule instead of on
+        a hunch.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>Grid bots</h2>
+      <p>
+        You set a price range and a number of steps ("grid levels") inside
+        it. The bot lays a ladder of buy orders below the current price
+        and sell orders above it, spaced evenly through that range. As the
+        price ticks up and down inside the range, it keeps buying the dips
+        and selling the bounces, over and over, off the same back-and-forth
+        motion.
+      </p>
+      <p>
+        <strong>Works best when:</strong> the price is oscillating sideways
+        inside a range rather than committing to a direction.
+        <strong>Struggles when:</strong> the price breaks hard through one
+        edge of the range and keeps going, the bot is left holding a
+        position on the wrong side of a move it wasn't built to follow.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>DCA bots</h2>
+      <p>
+        Short for dollar-cost averaging. The bot buys a fixed amount on a
+        fixed schedule, hourly, daily, whatever you set, no matter what
+        the price happens to be doing that moment. Over enough buys, your
+        average entry price smooths out toward the market's average over
+        that window instead of depending on the one moment you happened to
+        click "buy".
+      </p>
+      <p>
+        <strong>Works best when:</strong> you'd rather not try to time an
+        entry at all, and are building a position over weeks or months.
+        <strong>Struggles when:</strong> compared to a single lump-sum buy
+        right before a sustained rally, it will lag behind, averaging in
+        gives up some upside in exchange for not needing to guess the
+        bottom.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>Momentum bots</h2>
+      <p>
+        This one tries to catch a trend once it's actually confirmed,
+        rather than guessing one is coming. It watches for a signal, a
+        moving-average crossover (a short-term average price crossing
+        above or below a longer-term one) or an RSI reading moving out of
+        overbought/oversold territory, and enters once that signal fires,
+        then exits again once the signal reverses or the move stalls.
+      </p>
+      <p>
+        <strong>Works best when:</strong> the market is actually trending,
+        clean directional moves with real follow-through.
+        <strong>Struggles when:</strong> the market is choppy and
+        indecisive, signals can fire and reverse quickly (a "whipsaw"),
+        catching the bot in and back out for a small loss each time.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>So which one do you actually want?</h2>
+      <ul>
+        <li>Market's stuck in a range, not clearly trending either way? Grid tends to fit that best.</li>
+        <li>Don't want to think about timing at all, just building a position steadily? DCA.</li>
+        <li>A real trend is forming and you want to ride it? Momentum.</li>
+        <li>Want to make the call yourself, order by order? That's what spot trading is for, no bot required.</li>
+      </ul>
+      <p>
+        Quantex's <a href="/ai-hub">AI Hub</a> reads current price action
+        and volatility for you and can suggest a reasonable starting point
+        for any of these, but the choice, and the risk, is always yours.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-cta">
+    <div class="qx-container qx-cta-inner">
+      <div>
+        <h2>Ready to put this into practice?</h2>
+        <p>Create an account, deposit crypto, and try a strategy for yourself.</p>
+        <a class="qx-btn-primary qx-btn-lg" href={`${APP_URL}/signup`}>Trade Now</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .qx-learn-hero {
+    padding: var(--space-48) 0 var(--space-24);
+  }
+  .qx-eyebrow {
+    display: inline-block;
+    font-family: var(--font-data);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal-base);
+    background: var(--teal-pale);
+    padding: var(--space-3) var(--space-8);
+    border-radius: var(--radius-full);
+    margin-bottom: var(--space-16);
+  }
+  .qx-learn-hero h1 {
+    font-size: clamp(32px, 4.5vw, 48px);
+    color: var(--ink-base);
+    max-width: 20ch;
+  }
+  .qx-lead {
+    margin-top: var(--space-16);
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 60ch;
+  }
+
+  .qx-section {
+    padding: var(--space-48) 0;
+  }
+  .qx-section-alt {
+    background: var(--cream-deep);
+  }
+  /* .qx-prose itself (max-width, h2/p/ul sizing) lives in global.css. */
+
+  .qx-cta {
+    padding: var(--space-48) 0 var(--space-32);
+  }
+  .qx-cta-inner {
+    background: var(--teal-deep);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-48);
+    text-align: center;
+  }
+  .qx-cta-inner h2 {
+    color: var(--on-accent);
+  }
+  .qx-cta-inner p {
+    margin-top: var(--space-8);
+    color: var(--teal-sage);
+    max-width: 48ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .qx-cta-inner .qx-btn-primary {
+    margin-top: var(--space-16);
+  }
+
+  @media (max-width: 480px) {
+    .qx-container {
+      padding: 0 var(--space-16);
+    }
+    .qx-section {
+      padding: var(--space-32) 0;
+    }
+    .qx-cta-inner {
+      padding: var(--space-32) var(--space-24);
+    }
+  }
+</style>

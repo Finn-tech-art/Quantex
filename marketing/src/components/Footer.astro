@@ -1,0 +1,112 @@
+---
+// Site footer, present on every page. The link columns mirror Bybit's
+// dense-footer structure (per the user's request that this site match
+// Bybit's pages) while staying honest about what actually exists right
+// now: About/Blog/Terms/Privacy are real upcoming pages (separate slices,
+// see chat) so they're wired to their real intended paths already —
+// they'll simply 404 until each of those slices ships, same as any
+// in-progress site. Nothing under "Product" links anywhere that doesn't
+// already exist, since those are just anchors into this same page.
+const year = new Date().getFullYear();
+const APP_URL = "https://trading.onquantex.com";
+---
+
+<footer class="qx-footer">
+  <div class="qx-container qx-footer-grid">
+    <div class="qx-footer-brand">
+      <a href="/" class="qx-brand" aria-label="Quantex home">
+        <img src="/favicon.svg" alt="" width="24" height="24" />
+        <span>Quantex</span>
+      </a>
+      <p>Crypto exchange with automated trading bots.</p>
+    </div>
+
+    <div class="qx-footer-col">
+      <h4>Product</h4>
+      <a href="#products">Markets</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#security">Security</a>
+      <a href={APP_URL}>Trade Now</a>
+    </div>
+
+    <div class="qx-footer-col">
+      <h4>Company</h4>
+      <a href="/about">About</a>
+      <a href="/blog">Blog</a>
+    </div>
+
+    <div class="qx-footer-col">
+      <h4>Legal</h4>
+      <a href="/terms">Terms of Service</a>
+      <a href="/privacy">Privacy Policy</a>
+    </div>
+  </div>
+
+  <div class="qx-container qx-footer-bottom">
+    <p>&copy; {year} Quantex. All rights reserved.</p>
+  </div>
+</footer>
+
+<style>
+  .qx-footer {
+    border-top: 1px solid var(--cream-line);
+    background: var(--cream-deep);
+    padding: var(--space-48) 0 var(--space-24);
+  }
+  .qx-footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: var(--space-32);
+  }
+  .qx-footer-brand .qx-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--ink-base);
+  }
+  .qx-footer-brand p {
+    margin-top: var(--space-8);
+    color: var(--ink-soft);
+    font-size: 14px;
+    max-width: 32ch;
+  }
+  .qx-footer-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-10);
+  }
+  .qx-footer-col h4 {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-base);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-4);
+  }
+  .qx-footer-col a {
+    font-size: 14px;
+    color: var(--ink-soft);
+    transition: color 0.15s ease;
+  }
+  .qx-footer-col a:hover {
+    color: var(--teal-base);
+  }
+  .qx-footer-bottom {
+    margin-top: var(--space-48);
+    padding-top: var(--space-24);
+    border-top: 1px solid var(--cream-line);
+  }
+  .qx-footer-bottom p {
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  @media (max-width: 720px) {
+    .qx-footer-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>

@@ -24,6 +24,11 @@ dist/
 dist-ssr/
 *.local
 
+# Astro's local dev/build cache (type generation, content-collection cache,
+# preview.log) — regenerated automatically by `astro dev`/`astro build`,
+# same reasoning as node_modules/dist above.
+.astro/
+
 # OS junk
 .DS_Store
 Thumbs.db

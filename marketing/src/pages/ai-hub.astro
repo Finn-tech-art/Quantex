@@ -1,0 +1,159 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const APP_URL = "https://trading.onquantex.com";
+---
+
+<BaseLayout
+  title="AI Hub"
+  description="How Quantex's AI reads the market and helps you set up a Grid, DCA, or Momentum bot."
+>
+  <section class="qx-ai-hero">
+    <div class="qx-container">
+      <span class="qx-eyebrow">AI Hub</span>
+      <h1>The AI reads the market before you deploy a bot</h1>
+      <p class="qx-lead">
+        Not an autopilot that trades on its own, a second opinion. It
+        looks at what the market's doing right now and hands you a read
+        on it, in plain language, before you commit to a strategy.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>What it actually looks at</h2>
+      <p>
+        For whichever pair you're setting a bot up on, it pulls recent
+        price action and volatility across a few timeframes, the same
+        chart you'd be squinting at yourself, just checked systematically
+        instead of by eye. It's not reading news sentiment or making a
+        prediction about tomorrow, it's describing what the chart is
+        doing right now.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>A verdict, not a black box</h2>
+      <p>
+        You get a straightforward tag, bullish or bearish, and a reasoning
+        card explaining why it landed there: what it saw in the price
+        action that led to that read. Nothing about it is a hidden score
+        you're asked to just trust, you can see the reasoning and decide
+        for yourself whether you agree with it.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section">
+    <div class="qx-container qx-prose">
+      <h2>Auto-suggested starting parameters</h2>
+      <p>
+        Once you've seen the read, you can let it auto-fill a sensible
+        starting configuration, a price range for a Grid bot, an interval
+        for DCA, based on that same analysis, instead of staring at a
+        blank form guessing at numbers. It's a starting point, not a
+        final answer: every field it fills in is still yours to edit
+        before you deploy anything.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-section qx-section-alt">
+    <div class="qx-container qx-prose">
+      <h2>What "AI" doesn't mean here</h2>
+      <p>
+        It doesn't place a trade without you. It doesn't guarantee an
+        outcome. It reads current conditions and suggests a starting
+        setup, the actual strategy still runs on the plain rules described
+        on the <a href="/learn">Learn</a> page, Grid works a range, DCA
+        buys on schedule, Momentum follows a confirmed trend. The AI's job
+        ends at "here's a reasonable place to start", the strategy takes
+        it from there.
+      </p>
+    </div>
+  </section>
+
+  <section class="qx-cta">
+    <div class="qx-container qx-cta-inner">
+      <div>
+        <h2>See it on a real pair</h2>
+        <p>Start the bot creation wizard and try the AI Strategies tab for yourself.</p>
+        <a class="qx-btn-primary qx-btn-lg" href={`${APP_URL}/signup`}>Trade Now</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .qx-ai-hero {
+    padding: var(--space-48) 0 var(--space-24);
+  }
+  .qx-eyebrow {
+    display: inline-block;
+    font-family: var(--font-data);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal-base);
+    background: var(--teal-pale);
+    padding: var(--space-3) var(--space-8);
+    border-radius: var(--radius-full);
+    margin-bottom: var(--space-16);
+  }
+  .qx-ai-hero h1 {
+    font-size: clamp(32px, 4.5vw, 48px);
+    color: var(--ink-base);
+    max-width: 22ch;
+  }
+  .qx-lead {
+    margin-top: var(--space-16);
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 58ch;
+  }
+
+  .qx-section {
+    padding: var(--space-48) 0;
+  }
+  .qx-section-alt {
+    background: var(--cream-deep);
+  }
+
+  .qx-cta {
+    padding: var(--space-48) 0 var(--space-32);
+  }
+  .qx-cta-inner {
+    background: var(--teal-deep);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-48);
+    text-align: center;
+  }
+  .qx-cta-inner h2 {
+    color: var(--on-accent);
+  }
+  .qx-cta-inner p {
+    margin-top: var(--space-8);
+    color: var(--teal-sage);
+    max-width: 48ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .qx-cta-inner .qx-btn-primary {
+    margin-top: var(--space-16);
+  }
+
+  @media (max-width: 480px) {
+    .qx-container {
+      padding: 0 var(--space-16);
+    }
+    .qx-section {
+      padding: var(--space-32) 0;
+    }
+    .qx-cta-inner {
+      padding: var(--space-32) var(--space-24);
+    }
+  }
+</style>

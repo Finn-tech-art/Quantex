@@ -1,0 +1,292 @@
+---
+// Site header, present on every page via BaseLayout.astro.
+//
+// #markets stays a same-page anchor because that section only exists on
+// the homepage (index.astro) — there's no dedicated "/markets" page to
+// link to. (The homepage also still has #how-it-works and #products
+// sections — neither is in this nav directly any more: #how-it-works
+// was removed from the nav outright per the user's request, though the
+// section itself is untouched on the page; #products is reachable via
+// the hero's "Explore the bots" button instead.)
+//
+// Security now links to a real page (security.astro) instead of the
+// homepage's #security anchor, same treatment as About/Learn below — the
+// homepage's own #security section stays as a shorter teaser and links
+// down to the full page itself.
+//
+// Learn, AI Hub, Referral Program, and Help Center DO have real pages
+// (learn.astro, ai-hub.astro, referrals.astro, help-center.astro), same
+// as About/Terms/Privacy above — real hrefs, not anchors. AI Hub,
+// Referral Program, and Help Center are grouped under a "More" dropdown
+// rather than three more top-level links, same reasoning and same
+// CSS-only hover/focus mechanism as the "Legal" dropdown further down —
+// see its comment for how the dropdown itself works.
+//
+// About, Terms and Privacy DO have real pages now (about.astro, terms.astro,
+// privacy.astro), so they're linked with real hrefs below rather than
+// anchors. Terms + Privacy are grouped under a "Legal" dropdown instead of
+// two separate top-level links, per the user's choice — see the qx-dropdown
+// markup/CSS below. If a third legal doc is ever added (e.g. a cookie
+// policy), just add one more <a> inside .qx-dropdown-menu; the dropdown
+// sizes itself automatically.
+const APP_URL = "https://trading.onquantex.com";
+---
+
+<header class="qx-nav">
+  <div class="qx-container qx-nav-inner">
+    <a href="/" class="qx-brand" aria-label="Quantex home">
+      <img src="/favicon.svg" alt="" width="28" height="28" />
+      <span>Quantex</span>
+    </a>
+
+    <nav class="qx-links" aria-label="Primary">
+      <a href="#markets">Markets</a>
+      <a href="/security">Security</a>
+      <a href="/about">About</a>
+      <a href="/learn">Learn</a>
+
+      <!--
+        The "More" dropdown — same CSS-only hover/focus mechanism as
+        "Legal" just below (see its comment for the mechanics), just a
+        different trigger label and menu items.
+      -->
+      <div class="qx-dropdown">
+        <button
+          type="button"
+          class="qx-dropdown-trigger"
+          aria-haspopup="true"
+          aria-expanded="false"
+        >
+          More
+          <svg
+            class="qx-dropdown-chevron"
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M2 3.5L5 6.5L8 3.5"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <div class="qx-dropdown-menu">
+          <div class="qx-dropdown-menu-inner">
+            <a href="/ai-hub">AI Hub</a>
+            <a href="/referrals">Referral Program</a>
+            <a href="/help-center">Help Center</a>
+          </div>
+        </div>
+      </div>
+
+      <!--
+        The "Legal" dropdown. It's a plain CSS hover/focus dropdown — no
+        JavaScript involved — which keeps it consistent with the rest of
+        this static site (nothing else here uses client-side JS). Two
+        things make it open:
+          1. `.qx-dropdown:hover` — mouse hovers anywhere in the wrapper
+             (trigger button OR the menu itself, since the menu is a child
+             of the same wrapper).
+          2. `.qx-dropdown:focus-within` — keyboard users Tab onto the
+             trigger button or into a menu link; `:focus-within` matches
+             as long as focus is ANYWHERE inside .qx-dropdown, so tabbing
+             from the button into "Terms of Service" doesn't close it.
+        The trigger is a <button>, not an <a>, because it doesn't navigate
+        anywhere itself — it only reveals the two real links underneath.
+        aria-haspopup/aria-expanded describe that relationship to screen
+        readers (aria-expanded is static "false" here since there's no JS
+        to flip it — CSS-only dropdowns can't update ARIA state on
+        hover/focus, only on click — but the menu links are still reachable
+        and announced normally via Tab, so nothing is hidden from a
+        screen-reader user, it's just not announced as "expanded").
+      -->
+      <div class="qx-dropdown">
+        <button
+          type="button"
+          class="qx-dropdown-trigger"
+          aria-haspopup="true"
+          aria-expanded="false"
+        >
+          Legal
+          <svg
+            class="qx-dropdown-chevron"
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M2 3.5L5 6.5L8 3.5"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <div class="qx-dropdown-menu">
+          <div class="qx-dropdown-menu-inner">
+            <a href="/terms">Terms of Service</a>
+            <a href="/privacy">Privacy Policy</a>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="qx-actions">
+      <a class="qx-btn-secondary" href={`${APP_URL}/login`}>Log in</a>
+      <a class="qx-btn-primary" href={`${APP_URL}/signup`}>Trade Now</a>
+    </div>
+  </div>
+</header>
+
+<style>
+  .qx-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--cream-base) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--cream-line);
+  }
+  .qx-nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-24);
+    height: 72px;
+  }
+  .qx-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--ink-base);
+    flex-shrink: 0;
+  }
+  .qx-links {
+    display: flex;
+    align-items: center;
+    gap: var(--space-24);
+    flex: 1;
+    justify-content: center;
+  }
+  .qx-links a {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    transition: color 0.15s ease;
+  }
+  .qx-links a:hover {
+    color: var(--teal-base);
+  }
+
+  /* Wrapper that positions the dropdown menu relative to its trigger.
+     `position: relative` here is what lets the menu's `position: absolute`
+     below anchor to THIS box instead of the whole page. */
+  .qx-dropdown {
+    position: relative;
+  }
+  /* The "Legal" button itself. Reset button-specific defaults (border,
+     background) so it visually matches the plain <a> links either side of
+     it — font/color/size are inherited from `.qx-links` via `font: inherit`
+     and `color: inherit` rather than repeated here. */
+  .qx-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  .qx-dropdown-trigger:hover {
+    color: var(--teal-base);
+  }
+  /* Chevron flips upside-down while the dropdown is open, as a visual cue.
+     Change `rotate(180deg)` to e.g. `rotate(90deg)` for a sideways-turning
+     arrow instead. */
+  .qx-dropdown-chevron {
+    transition: transform 0.15s ease;
+  }
+  .qx-dropdown:hover .qx-dropdown-chevron,
+  .qx-dropdown:focus-within .qx-dropdown-chevron {
+    transform: rotate(180deg);
+  }
+  /* The dropdown panel. It's always in the DOM (so keyboard Tab can reach
+     its links) but visually hidden via opacity/visibility until the
+     wrapper is hovered or has focus inside it — see the two rules below
+     this one. `pointer-events: none` while closed stops it from silently
+     eating hover/clicks that should pass through to whatever's behind it. */
+  .qx-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Padding-top (not margin-top) closes the gap between trigger and menu
+       WITHOUT creating a dead zone the mouse can slip through on the way
+       down — the invisible padding is still "inside" .qx-dropdown-menu, so
+       hovering it keeps :hover active on the parent .qx-dropdown. */
+    padding-top: var(--space-8);
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+  .qx-dropdown:hover .qx-dropdown-menu,
+  .qx-dropdown:focus-within .qx-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  /* Inner box that actually looks like a card — separated from
+     .qx-dropdown-menu so the padding-top spacer above isn't part of the
+     visible card (it'd otherwise show as dead space inside the border). */
+  .qx-dropdown-menu-inner {
+    display: flex;
+    flex-direction: column;
+    background: var(--cream-deep);
+    border: 1px solid var(--cream-line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-dropdown);
+    padding: var(--space-4);
+  }
+  .qx-dropdown-menu a {
+    padding: var(--space-4) var(--space-6);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .qx-dropdown-menu a:hover {
+    color: var(--teal-base);
+    background: var(--cream-line);
+  }
+
+  .qx-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-10);
+    flex-shrink: 0;
+  }
+  @media (max-width: 720px) {
+    .qx-links {
+      display: none;
+    }
+  }
+</style>

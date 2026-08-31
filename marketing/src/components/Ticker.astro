@@ -151,4 +151,19 @@ const COINS = [
       overflow-x: auto;
     }
   }
+  @media (max-width: 480px) {
+    /* Smaller icon/text and tighter padding per item — the strip is
+       already inherently mobile-friendly (it scrolls horizontally
+       instead of wrapping), this just fits more of it in view on a
+       narrow screen without the individual items feeling oversized. */
+    .qx-ticker-item {
+      gap: var(--space-4);
+      padding: var(--space-6) var(--space-10);
+      font-size: 12px;
+    }
+    .qx-ticker-logo {
+      width: 13px;
+      height: 13px;
+    }
+  }
 </style>

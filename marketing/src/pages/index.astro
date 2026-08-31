@@ -855,7 +855,14 @@ const products = [
       padding: 0 var(--space-16);
     }
     .qx-hero-copy h1 {
-      font-size: 30px;
+      font-size: 26px;
+    }
+    .qx-hero-sub {
+      font-size: 15px;
+    }
+    .qx-btn-lg {
+      padding: var(--space-8) var(--space-16);
+      font-size: 15px;
     }
     .qx-hero-cta {
       flex-direction: column;
@@ -880,8 +887,32 @@ const products = [
     .qx-section {
       padding: var(--space-32) 0;
     }
+    .qx-section h2 {
+      font-size: 24px;
+    }
     .qx-hero {
       min-height: 480px;
+    }
+    /* Cards (bot types, market prices) default to a roomy 48px of padding
+       (--space-24), sized for a grid that's still 2-3 columns wide down
+       to 480px — once it drops to a single column right at this
+       breakpoint, that padding starts to look oversized relative to a
+       320-375px-wide card. */
+    .qx-bot-card,
+    .qx-market-card {
+      padding: var(--space-16);
+    }
+    .qx-bonus {
+      padding: var(--space-32) 0;
+    }
+    .qx-bonus-copy h2 {
+      font-size: 24px;
+    }
+    .qx-strip-inner strong {
+      font-size: 18px;
+    }
+    .qx-bonus-media img {
+      max-width: 220px;
     }
   }
 </style>

@@ -288,5 +288,35 @@ const APP_URL = "https://trading.onquantex.com";
     .qx-links {
       display: none;
     }
+    /* Shorter bar and smaller wordmark once the link list is gone — the
+       72px height was sized to comfortably fit the full link row, which
+       no longer exists at this width, so keeping it that tall just wastes
+       vertical space above the fold on a phone. */
+    .qx-nav-inner {
+      height: 56px;
+    }
+    .qx-brand {
+      font-size: 17px;
+    }
+    .qx-brand img {
+      width: 24px;
+      height: 24px;
+    }
+  }
+  @media (max-width: 400px) {
+    /* Below ~400px even "Log in" + "Trade Now" side by side gets tight —
+       shrink the buttons' own padding rather than drop "Log in"
+       entirely, so both stay one tap away. */
+    .qx-actions {
+      gap: var(--space-6);
+    }
+    /* No :global() needed — these two <a> tags are part of THIS
+       component's own template above, so Astro already scopes them to
+       Nav.astro like everything else here. */
+    .qx-actions .qx-btn-primary,
+    .qx-actions .qx-btn-secondary {
+      padding: var(--space-6) var(--space-10);
+      font-size: 14px;
+    }
   }
 </style>

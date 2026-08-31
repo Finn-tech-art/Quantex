@@ -7,6 +7,11 @@
 // they'll simply 404 until each of those slices ships, same as any
 // in-progress site. Nothing under "Product" links anywhere that doesn't
 // already exist, since those are just anchors into this same page.
+//
+// "Markets" and "Security" here need to stay in sync with Nav.astro by
+// hand — Markets points at the homepage's #markets section (the live-
+// price cards, not the old #products bot-types anchor) and Security
+// points at the real /security page now, same as the top nav.
 const year = new Date().getFullYear();
 const APP_URL = "https://trading.onquantex.com";
 ---
@@ -23,9 +28,9 @@ const APP_URL = "https://trading.onquantex.com";
 
     <div class="qx-footer-col">
       <h4>Product</h4>
-      <a href="#products">Markets</a>
+      <a href="#markets">Markets</a>
       <a href="#how-it-works">How it works</a>
-      <a href="#security">Security</a>
+      <a href="/security">Security</a>
       <a href={APP_URL}>Trade Now</a>
     </div>
 
@@ -107,6 +112,22 @@ const APP_URL = "https://trading.onquantex.com";
   @media (max-width: 720px) {
     .qx-footer-grid {
       grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 480px) {
+    /* One column instead of two on phones — two 50%-width columns at
+       this width left each link column too narrow, wrapping most links
+       onto two lines. */
+    .qx-footer-grid {
+      grid-template-columns: 1fr;
+      gap: var(--space-24);
+    }
+    .qx-footer {
+      padding: var(--space-32) 0 var(--space-16);
+    }
+    .qx-footer-bottom {
+      margin-top: var(--space-24);
+      padding-top: var(--space-16);
     }
   }
 </style>

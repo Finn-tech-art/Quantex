@@ -166,3 +166,18 @@ a:focus-visible {
   text-decoration-color: var(--cream-line);
   text-underline-offset: 3px;
 }
+/* Slightly smaller headings on phones — shared here (rather than
+   repeated in every page that uses .qx-prose) since this one file
+   already covers About, Learn, AI Hub, Referrals, Security, and every
+   blog post. Body text (p/ul, 16px) is left alone — that's already a
+   comfortable phone reading size, shrinking it further would hurt
+   readability for no real space savings. */
+@media (max-width: 480px) {
+  .qx-prose h2 {
+    font-size: 22px;
+    margin-top: var(--space-24);
+  }
+  .qx-prose h3 {
+    font-size: 17px;
+  }
+}

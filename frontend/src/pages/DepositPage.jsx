@@ -5,6 +5,8 @@ import QRCode from "qrcode";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
+import NetworkGlyph from "../components/NetworkGlyph";
+import SelectField from "../components/SelectField";
 import { expectDeposit, getBalances, getDepositAddress, WS_BASE } from "../lib/api";
 
 const NETWORKS = ["TRC20", "BASE", "POLYGON"];
@@ -89,7 +91,7 @@ export default function DepositPage() {
       <div className="w-full max-w-sm" style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         <TopNav />
 
-        <NetworkSelector network={network} onChange={setNetwork} />
+        <NetworkSelector network={network} onChange={setNetwork} t={t} />
 
         <AddressCard
           address={address}
@@ -153,34 +155,15 @@ function TopNav() {
   );
 }
 
-function NetworkSelector({ network, onChange }) {
+function NetworkSelector({ network, onChange, t }) {
   return (
-    <div style={{ display: "flex", gap: "var(--space-4)" }}>
-      {NETWORKS.map((n) => {
-        const selected = n === network;
-        return (
-          <button
-            key={n}
-            type="button"
-            onClick={() => onChange(n)}
-            style={{
-              flex: 1,
-              background: selected ? "var(--teal-pale)" : "var(--cream-deep)",
-              border: selected ? "1.5px solid var(--teal-base)" : "1px solid var(--cream-line)",
-              borderRadius: "var(--radius-lg)",
-              padding: "10px 8px",
-              fontFamily: "var(--font-body)",
-              fontWeight: 600,
-              fontSize: "12.5px",
-              color: "var(--ink-base)",
-              cursor: "pointer",
-            }}
-          >
-            {n}
-          </button>
-        );
-      })}
-    </div>
+    <SelectField
+      label={t("deposit.network")}
+      value={network}
+      options={NETWORKS}
+      onChange={onChange}
+      renderIcon={(n) => <NetworkGlyph network={n} size={20} />}
+    />
   );
 }
 

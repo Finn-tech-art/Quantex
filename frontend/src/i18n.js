@@ -506,6 +506,7 @@ const resources = {
       },
       trade: {
         title: 'Trade',
+        pairLabel: 'Pair',
         simulatedNotice: 'Simulated execution — real balance. Trades never touch a real exchange, but every buy or sell moves your real USDT and asset balances at the live market price, including a {{feePct}} fee.',
         buy: 'Buy',
         sell: 'Sell',

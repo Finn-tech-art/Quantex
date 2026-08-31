@@ -19,6 +19,9 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
+import CoinGlyph from "../components/CoinGlyph";
+import NetworkGlyph from "../components/NetworkGlyph";
+import SelectField from "../components/SelectField";
 import { Field, ErrorText, PrimaryButton } from "../components/FormControls";
 import { confirmWithdrawal, getBalances, getMyWithdrawals, getWithdrawalFeePreview, requestWithdrawal } from "../lib/api";
 
@@ -253,18 +256,20 @@ function WithdrawForm({ accessToken, balances, onRequested, t }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
-      <PillSelector
+      <SelectField
         label={t("withdraw.assetLabel")}
         options={balances.map((b) => b.asset)}
         value={asset}
         onChange={setAsset}
+        renderIcon={(a) => <CoinGlyph asset={a} size={20} />}
       />
 
-      <PillSelector
+      <SelectField
         label={t("withdraw.networkLabel")}
         options={asset ? ASSET_NETWORKS[asset] || [] : []}
         value={network}
         onChange={setNetwork}
+        renderIcon={(n) => <NetworkGlyph network={n} size={20} />}
       />
 
       <Field
@@ -329,43 +334,6 @@ function WithdrawForm({ accessToken, balances, onRequested, t }) {
         {submitting ? t("withdraw.submitting") : t("withdraw.submit")}
       </PrimaryButton>
     </form>
-  );
-}
-
-function PillSelector({ label, options, value, onChange }) {
-  if (options.length === 0) return null;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-      <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "11px", color: "var(--ink-soft)" }}>
-        {label}
-      </span>
-      <div style={{ display: "flex", gap: "var(--space-4)" }}>
-        {options.map((opt) => {
-          const selected = opt === value;
-          return (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => onChange(opt)}
-              style={{
-                flex: 1,
-                background: selected ? "var(--teal-pale)" : "var(--cream-deep)",
-                border: selected ? "1.5px solid var(--teal-base)" : "1px solid var(--cream-line)",
-                borderRadius: "var(--radius-lg)",
-                padding: "10px 8px",
-                fontFamily: "var(--font-body)",
-                fontWeight: 600,
-                fontSize: "12.5px",
-                color: "var(--ink-base)",
-                cursor: "pointer",
-              }}
-            >
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

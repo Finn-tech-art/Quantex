@@ -78,7 +78,24 @@ export default function TabBar() {
               textDecoration: "none",
             }}
           >
-            <Icon name={tab.icon} variant={active ? "filled" : "outline"} size={22} color={color} />
+            {/* `key` deliberately changes exactly when this tab's active
+                state flips, forcing React to remount the <Icon> (rather
+                than just re-render it with new props) at that moment —
+                which is what restarts the "qx-tab-pop" CSS animation (see
+                index.css) fresh each time. Without a changing key here,
+                the animation class would still be attached correctly, but
+                the browser would only ever play it once per page load
+                (a re-render with an already-applied animation class
+                doesn't retrigger the animation). Only the newly-ACTIVE
+                icon gets the class; switching away plays no animation. */}
+            <Icon
+              key={active ? "active" : "inactive"}
+              name={tab.icon}
+              variant={active ? "filled" : "outline"}
+              size={22}
+              color={color}
+              className={active ? "qx-tab-pop" : undefined}
+            />
             <span
               style={{
                 fontFamily: "var(--font-data)",

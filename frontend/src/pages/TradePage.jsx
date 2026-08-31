@@ -19,6 +19,7 @@ import useFlashOnChange, { FLASH_FADE_MS } from "../hooks/useFlashOnChange";
 import { ErrorText } from "../components/FormControls";
 import ConfirmSheet from "../components/ConfirmSheet";
 import CoinGlyph from "../components/CoinGlyph";
+import SelectField from "../components/SelectField";
 import { useToast } from "../context/ToastContext";
 import { buyTrade, getBalances, getTradeChart, getTradeHistory, getTradePrice, sellTrade } from "../lib/api";
 
@@ -174,7 +175,13 @@ export default function TradePage() {
           {t("trade.title")}
         </span>
 
-        <PairTabs pair={pair} onSelect={setPair} />
+        <SelectField
+          label={t("trade.pairLabel")}
+          value={pair}
+          options={PAIRS}
+          onChange={setPair}
+          renderIcon={(p) => <CoinGlyph asset={baseAsset(p)} size={20} />}
+        />
 
         <PriceHeader price={price} chart={chart} />
 
@@ -234,63 +241,6 @@ export default function TradePage() {
 
         <TradeHistory history={history} t={t} />
       </div>
-    </div>
-  );
-}
-
-function PairTabs({ pair, onSelect }) {
-  return (
-    <div style={{ display: "flex", gap: "var(--space-4)" }}>
-      {PAIRS.map((p) => {
-        const active = p === pair;
-        return (
-          <button
-            key={p}
-            type="button"
-            onClick={() => onSelect(p)}
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "var(--space-3)",
-              background: active ? "var(--teal-base)" : "var(--cream-deep)",
-              color: active ? "var(--on-accent)" : "var(--ink-soft)",
-              border: `1px solid ${active ? "var(--teal-base)" : "var(--cream-line)"}`,
-              borderRadius: "var(--radius-md)",
-              padding: "8px 4px",
-              fontFamily: "var(--font-data)",
-              fontWeight: 600,
-              fontSize: "11px",
-              cursor: "pointer",
-            }}
-          >
-            {/* A ring specifically around the coin badge — separate from
-                the tab's own background/border above — so the selected
-                pair's icon reads as "picked out" on its own, the way
-                Bybit halos the active pair's glyph rather than only
-                relying on the whole tab's fill color. box-shadow (not a
-                border) so it doesn't add any layout width and can sit
-                flush against the circular glyph. color-mix keeps it tied
-                to --on-accent, the same fixed light color already used
-                for this button's text/icon once active (see index.css's
-                note on --on-accent for why that token never flips with
-                the theme toggle) — so the ring stays correctly visible
-                against the --teal-base fill in both light and dark mode. */}
-            <span
-              style={{
-                display: "flex",
-                borderRadius: "50%",
-                boxShadow: active ? "0 0 0 2px color-mix(in srgb, var(--on-accent) 55%, transparent)" : "none",
-                transition: "box-shadow 0.2s ease",
-              }}
-            >
-              <CoinGlyph asset={baseAsset(p)} size={16} />
-            </span>
-            {p}
-          </button>
-        );
-      })}
     </div>
   );
 }

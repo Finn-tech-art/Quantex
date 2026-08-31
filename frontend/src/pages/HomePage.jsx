@@ -33,6 +33,7 @@ import DeltaChip from "../components/DeltaChip";
 import Icon from "../components/Icon";
 import NotificationBell from "../components/NotificationBell";
 import VerifyEmailPrompt from "../components/VerifyEmailPrompt";
+import useCountUp from "../hooks/useCountUp";
 import { getBalances, getMarkets, getPortfolioHistory, listBots } from "../lib/api";
 
 export default function HomePage() {
@@ -157,6 +158,13 @@ const RANGE_OPTIONS = [
 
 function HeroCard({ totalUsd, history, range, onRangeChange, balanceHidden, onToggleBalanceHidden, t }) {
   const loading = totalUsd === null || history === null;
+  // See useCountUp's own doc comment: this returns a plain 0 (never null)
+  // while totalUsd hasn't resolved yet, which is fine since the `loading`
+  // branch below renders the spinner instead of this number during that
+  // window — the moment totalUsd arrives, the hook animates from that
+  // seeded 0 up to the real figure, rather than the real number flashing
+  // on screen for a frame before the count-up starts.
+  const displayedTotal = useCountUp(totalUsd);
   const firstClose = history && history.length > 0 ? Number(history[0].close) : null;
   const lastClose = history && history.length > 0 ? Number(history[history.length - 1].close) : null;
   const pctChange = firstClose && firstClose !== 0 ? ((lastClose - firstClose) / firstClose) * 100 : 0;
@@ -199,7 +207,7 @@ function HeroCard({ totalUsd, history, range, onRangeChange, balanceHidden, onTo
           <span className="qx-num" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "32px", color: "var(--on-accent)" }}>
             {balanceHidden
               ? "••••••"
-              : `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              : `$${displayedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </span>
 
           {history.length > 1 && <Sparkline points={history} color={isUp ? "var(--gain-on-dark)" : "var(--loss)"} />}
@@ -475,27 +483,30 @@ function hashStringToSeed(str) {
   return hash;
 }
 
-// Picks ADS_PER_DAY rows out of AD_POOL, reseeded by the device's local
-// calendar date so every visit on the same day gets the same slides in
+// Picks `count` rows out of `pool`, reseeded by the device's local
+// calendar date so every visit on the same day gets the same picks in
 // the same order, and the set changes again the next day. (Using local
 // date components rather than an ISO/UTC date specifically so "today"
 // matches what the viewer's own clock says, not UTC's.) A Fisher-Yates
-// shuffle driven by the seeded RNG, keeping only the first ADS_PER_DAY
+// shuffle driven by the seeded RNG, keeping only the first `count`
 // entries, is a standard unbiased way to pick a random subset without
-// repeats. NOTE: if the app is left open across midnight, this won't
-// re-pick mid-session — it's only recomputed on mount (see the useMemo
-// in AdsCarousel below) — which is fine for a decorative banner.
-function pickDailyAds() {
+// repeats. `salt` is mixed into the seed so two different pools picked
+// on the same day (the ads carousel and the news feed both use this)
+// don't end up shuffled in lockstep with each other. NOTE: if the app is
+// left open across midnight, this won't re-pick mid-session — it's only
+// recomputed on mount by each caller's own useMemo — which is fine for
+// decorative content like this.
+function pickDaily(pool, count, salt) {
   const now = new Date();
-  const dateKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+  const dateKey = `${salt}-${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
   const random = mulberry32(hashStringToSeed(dateKey));
 
-  const shuffled = [...AD_POOL];
+  const shuffled = [...pool];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return shuffled.slice(0, ADS_PER_DAY);
+  return shuffled.slice(0, count);
 }
 
 // Untitled Bybit-style sliding ad banner carousel, sitting directly above
@@ -515,7 +526,7 @@ function AdsCarousel({ t }) {
   // render — pickDailyAds does a bit of shuffling work that only needs
   // to happen once, and re-running it on every render would risk
   // reshuffling mid-session if any of its inputs ever became reactive.
-  const slides = useMemo(() => pickDailyAds(), []);
+  const slides = useMemo(() => pickDaily(AD_POOL, ADS_PER_DAY, "ads"), []);
   const trackRef = useRef(null);
   const [index, setIndex] = useState(0);
   // Guards against the onScroll handler fighting a code-driven scroll
@@ -788,6 +799,394 @@ function LeaderboardSection({ t }) {
   );
 }
 
+// Thumbnail pool for the News tab's cards below — real photos (same
+// Unsplash-CDN hotlinking approach as AD_POOL above) covering
+// finance/crypto/fintech themes broadly rather than one photo per
+// headline. 45 images cycled across NEWS_POOL's 60 articles (via `i %
+// NEWS_IMAGES.length` where NEWS_POOL is built below) — some photos
+// repeat across articles, which is normal for how real news apps assign
+// generic category thumbnails, not a bug. Swap or add URLs here to
+// change what's available; the assignment below adapts automatically.
+const NEWS_IMAGES = [
+  "https://images.unsplash.com/photo-1665597704311-d7304eaf70ac?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1666816943145-bac390ca866c?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1667422380246-3bed910ffae1?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1672911640671-65d5dfa97d26?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1634704784915-aacf363b021f?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1605792657660-596af9009e82?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1629339942248-45d4b10c8c2f?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1639322537228-f710d846310a?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1644088379091-d574269d422f?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1640161704729-cbe966a08476?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1639322537504-6427a16b0a28?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1623227413711-25ee4388dae3?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1622630998477-20aa696ecb05?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1523961131990-5ea7c61b2107?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1664526937033-fe2c11f1be25?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1694219782948-afcab5c095d3?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1676911809759-77bb68b691c9?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1667984510054-d4562f93621d?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1639825988283-39e5408b75e8?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1639389016105-2fb11199fb6b?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1640592409070-e35e28aedf14?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1646495859894-2717409cd306?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1666816943035-15c29931e975?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1639322537138-5e513100b36e?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1676911809746-85d90edbbe4a?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1645226880663-81561dcab0ae?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1591696205602-2f950c417cb9?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1560221328-12fe60f83ab8?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1745509267699-1b1db256601e?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1559526324-593bc073d938?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1561525155-40a650192479?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1651341050677-24dba59ce0fd?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1651340981821-b519ad14da7c?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1612178991541-b48cc8e92a4d?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1651340927948-26826aaef4b0?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1672617195387-1a890be98e28?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1672870153636-32a5e5218792?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1516245834210-c4c142787335?w=500&q=80&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1644952354935-0bc0d25a9996?w=500&q=80&auto=format&fit=crop",
+];
+
+// The full 60-article pool the News tab draws from. Kept as plain inline
+// strings here rather than routed through i18n.js — the same call this
+// file's original sampleItems array already made for this exact kind of
+// fake/decorative filler content (see NewsSection below), just at 20x the
+// volume; adding ~180 more i18n keys for text nobody will ever actually
+// translate isn't worth the bloat. Each body is ~150 words, matching what
+// was asked for — NewsCard below shows a one-line excerpt by default and
+// reveals the full body on tap. NEWS_PER_DAY of these 60 are shown on any
+// given day; see pickDaily above for how "today's" set is chosen, and
+// NewsSection for where it's called.
+const NEWS_ARTICLES = [
+  {
+    tag: "MARKET",
+    title: "BTC holds above key support after weekend volatility",
+    body: "Bitcoin spent the weekend testing a support zone that has held on three separate occasions over the past month, and buyers stepped in again each time price approached it. Spot volume picked up modestly during the defense, while perpetual funding rates cooled from their recent highs, suggesting some of the excess leverage that built up during the prior rally has been flushed out. Options markets show a cluster of open interest at strikes just above the current price, which traders are watching as a potential magnet if momentum turns higher. On-chain data shows large wallets adding to positions during the dip rather than distributing, a pattern that has historically preceded periods of consolidation rather than a deeper breakdown. Analysts note that the next meaningful test is the resistance band where the last rally stalled; a clean move through it on rising volume would be the clearer signal traders are waiting for before adding risk back.",
+  },
+  {
+    tag: "MARKET",
+    title: "ETH grinds higher as staking supply keeps tightening",
+    body: "Ether has posted a slow, steady climb over the past two weeks, a move traders are attributing partly to a shrinking liquid supply rather than any single catalyst. The validator queue has lengthened again, meaning more ETH is being locked into staking faster than it is being unstaked, which mechanically reduces the amount available to trade on exchanges. At the same time, activity on layer-2 networks has continued absorbing transaction demand that used to hit the mainnet directly, keeping gas fees low even as usage climbs. Some traders see this combination — tightening float plus healthy underlying usage — as a more sustainable setup than a purely speculative rally. Derivatives data shows funding rates rising only gradually alongside spot price, rather than spiking, which suggests the move so far has been driven more by spot accumulation than by leveraged long positions chasing the trend. The next few sessions will show whether that steady character holds.",
+  },
+  {
+    tag: "MARKET",
+    title: "SOL network activity climbs as new dApps launch",
+    body: "Solana's on-chain activity has picked up noticeably over the past few weeks, with daily active addresses and total transaction count both climbing to levels not seen since earlier in the cycle. Several new decentralized applications have launched on the network recently, ranging from trading tools to consumer-facing apps, and a handful have drawn enough usage to meaningfully move the network's aggregate numbers. Decentralized exchange volume on Solana has grown alongside this activity, with a few venues now regularly processing volume that rivals established players on other chains. The network has handled the increased load without the kind of sustained congestion that drew criticism in past cycles, though brief slowdowns during periods of extremely high demand still occur. Developers building on the network point to lower transaction costs and fast confirmation times as the main draw for new projects choosing to launch there rather than on more established but pricier alternatives.",
+  },
+  {
+    tag: "MARKET",
+    title: "Altcoins outperform majors in a quiet trading week",
+    body: "With Bitcoin trading in a tight range for much of the week, capital has rotated noticeably into mid-cap altcoins, several of which have posted double-digit gains while the two largest assets by market cap moved only a few percent either way. Traders describe the pattern as fairly typical for a low-volatility stretch: when the majors stop moving, speculative flow tends to look for opportunity further down the market-cap curve. Bitcoin's dominance metric has drifted lower over the same period, consistent with that rotation. Thin weekend liquidity likely amplified some of the moves, with a few tokens posting sharp intraday swings on relatively modest volume. Analysts caution that these rotations can reverse quickly once Bitcoin resumes a clear directional move, since altcoin liquidity tends to evaporate faster than it appears during quiet periods. For now, traders are treating the move as a liquidity-driven rotation rather than a fundamental shift in relative strength.",
+  },
+  {
+    tag: "MARKET",
+    title: "XRP volatility spikes around a legal-case update",
+    body: "XRP saw a sharp increase in trading volume and price volatility this week following a procedural update in a long-running legal matter closely watched by the market. The token moved several percent in both directions within hours as traders reacted to headlines before full details were available, a pattern that has repeated several times over the course of the case. A number of exchanges reported temporarily elevated order book activity during the move, and open interest in XRP derivatives climbed alongside spot volume. Some traders used the volatility to take short-term directional positions, while others stayed on the sidelines, noting that headline-driven moves in this asset have historically reversed a meaningful portion of their initial swing within a day or two. Market participants broadly agree that a fully resolved outcome, whenever it arrives, would likely have a larger and more lasting effect on sentiment than any single interim update has produced so far.",
+  },
+  {
+    tag: "DEFI",
+    title: "Total value locked in DeFi ticks back toward yearly highs",
+    body: "The total value locked across decentralized finance protocols has climbed steadily over the past month, approaching levels last seen near the start of the year. Lending markets account for a large share of the increase, with utilization rates rising as more borrowers tap into on-chain credit for leveraged positions and working capital. Liquid staking derivatives have also grown their share of the total, reflecting continued demand for yield-bearing collateral that can be redeployed elsewhere in the ecosystem. A handful of newer protocols focused on real-world asset collateral have contributed a smaller but fast-growing slice of the total as well. Security researchers note that the average age and audit coverage of protocols holding significant deposits has improved compared to prior cycles, a shift some attribute to users increasingly favoring established, well-reviewed platforms over newer, unaudited ones chasing short-term yield. Whether the trend continues likely depends on broader market conditions holding steady.",
+  },
+  {
+    tag: "DEFI",
+    title: "A major DEX rolls out a cross-chain swap upgrade",
+    body: "One of the more widely used decentralized exchanges has shipped an upgrade aimed at making cross-chain swaps faster and cheaper, combining a new liquidity-routing engine with tighter integration to several bridging protocols. Early users report noticeably lower slippage on mid-sized trades that previously had to route through multiple hops to reach the best price. The update also introduces a unified interface for quoting prices across chains before a trade is confirmed, reducing the guesswork that previously came with cross-chain swaps priced separately on each side. Liquidity providers on the platform have seen fee revenue tick up modestly since the change, attributed to higher overall trade volume rather than a change in fee structure. Competing platforms are reportedly working on similar routing improvements, suggesting cross-chain liquidity aggregation is becoming a competitive front in its own right rather than a secondary feature bolted onto existing single-chain exchanges.",
+  },
+  {
+    tag: "DEFI",
+    title: "Liquid restaking protocols see fresh inflows",
+    body: "Liquid restaking protocols have attracted a fresh wave of deposits over the past several weeks, continuing a trend that has made this one of the fastest-growing categories within decentralized finance. The appeal is straightforward: deposited assets earn a base staking yield while simultaneously securing additional network services, layering extra potential returns on top of a familiar base. Several protocols in the space have expanded the list of services their restaked collateral can secure, broadening the potential yield sources available to depositors. Risk-focused commentators continue to flag the added complexity this introduces, since a restaked position now carries exposure not just to the underlying asset but to the security assumptions of every additional service it backs. Protocol teams have responded by publishing more detailed risk disclosures and, in some cases, capping how much total value a given service can secure at once, aiming to limit concentrated exposure to any single point of failure.",
+  },
+  {
+    tag: "DEFI",
+    title: "Stablecoin-backed lending markets expand on layer-2s",
+    body: "Lending markets built around stablecoin collateral have grown quickly on several layer-2 networks over recent months, drawing borrowers who previously avoided on-chain credit due to high mainnet gas costs. With transaction fees now a small fraction of what they were before these networks matured, smaller borrowers can participate in strategies that were previously only economical at larger position sizes. Utilization rates on several of these markets have climbed steadily, pushing borrowing costs modestly higher and drawing in additional liquidity providers chasing the improved yield. Protocol teams have also introduced more granular collateral ratio tiers, letting borrowers choose between higher leverage with tighter liquidation buffers or more conservative positions with wider safety margins. The combination of lower fees and more flexible risk parameters is often cited as the main reason this segment has grown faster on layer-2s than it has on the underlying mainnet over the same period.",
+  },
+  {
+    tag: "DEFI",
+    title: "On-chain options volume hits a fresh monthly high",
+    body: "Decentralized options protocols recorded their highest monthly trading volume to date, extending a growth trend that has picked up pace as more structured products launch on top of existing liquidity pools. Much of the growth is attributed to automated vaults that sell covered calls or cash-secured puts on behalf of depositors, offering a relatively simple way to earn premium income without actively managing individual options positions. Institutional-style trading desks have also increased their presence in the space, using on-chain options to hedge spot and derivatives exposure ahead of known volatility events like major protocol upgrades or macroeconomic data releases. Liquidity remains thinner than on centralized options venues for now, which continues to widen spreads on less popular strikes and expiries. Protocol teams are working on market-maker incentive programs aimed at narrowing that gap, viewing tighter pricing as the main remaining barrier to attracting larger, more price-sensitive flow.",
+  },
+  {
+    tag: "REGULATION",
+    title: "Regulators signal a clearer path for spot crypto products",
+    body: "Regulatory officials in several major markets have signaled progress toward clearer rules governing spot crypto investment products, following an extended period of public comment and industry consultation. Exchanges and asset managers have been preparing compliance frameworks in anticipation, including enhanced surveillance-sharing agreements and stricter listing standards for underlying assets. Industry groups have broadly welcomed the direction of travel, arguing that clearer rules reduce the operational uncertainty that has historically slowed institutional participation. Some critics note that the proposed frameworks still leave meaningful gaps around newer asset categories, meaning further rulemaking will likely be needed as the market continues to evolve. Market participants are watching closely for the specific language that ultimately gets adopted, since the details of custody requirements and reporting obligations will determine how quickly new products can actually launch. Several firms have said they are prepared to move within weeks of final rules being published.",
+  },
+  {
+    tag: "REGULATION",
+    title: "A new framework for stablecoin reserves moves forward",
+    body: "A proposed regulatory framework governing how stablecoin issuers must back their tokens has advanced through another stage of review, bringing closer scrutiny to reserve composition, redemption guarantees, and disclosure requirements. Under the draft rules, issuers would need to hold reserves predominantly in highly liquid, low-risk assets and provide regular independent attestations confirming that holdings match circulating supply. Redemption timelines would also be standardized, addressing concerns raised during past periods of market stress when some users faced delays converting tokens back to cash. Several major issuers have already begun aligning their reserve practices with the proposed standards ahead of any formal requirement, viewing early compliance as a competitive advantage. Smaller or less transparent issuers may face a harder transition, and some industry observers expect a period of consolidation as the rules take effect, with users gravitating toward issuers who can most clearly demonstrate compliance.",
+  },
+  {
+    tag: "REGULATION",
+    title: "Cross-border crypto tax reporting rules take shape",
+    body: "A framework for standardized cross-border tax reporting on crypto transactions has moved into its next phase, aiming to give tax authorities in participating jurisdictions a consistent view of asset transfers that cross national lines. Under the emerging rules, exchanges and other reporting entities would need to collect and share transaction data in a common format, reducing the reporting inconsistencies that have complicated enforcement in the past. Several exchanges have already begun rolling out new reporting tools ahead of any formal deadline, giving users earlier access to consolidated transaction summaries. For active traders, the practical effect is likely to be more detailed year-end tax documents, but also less ambiguity about what needs to be reported and how. Tax professionals who work with crypto-active clients say the added structure should reduce filing errors over time, even if it means somewhat more paperwork from exchanges in the near term as systems adjust.",
+  },
+  {
+    tag: "REGULATION",
+    title: "Licensing requirements tighten for custodial platforms",
+    body: "New licensing standards for platforms that hold customer crypto assets on their behalf have tightened in several jurisdictions, introducing higher capital reserve requirements and more frequent third-party audits. The changes are aimed at reducing the risk of a platform becoming insolvent while still holding customer deposits, a scenario that has played out publicly a handful of times in past cycles. Larger, well-capitalized platforms have generally welcomed the changes, viewing stricter standards as a way to differentiate themselves from smaller competitors that may struggle to meet the new bar. Smaller platforms have raised concerns about the cost of compliance, warning that some may need to scale back operations or seek additional funding to meet the new requirements. Regulators have indicated a transition period will be provided, giving existing platforms time to adjust rather than requiring immediate compliance, though the exact timeline still varies by jurisdiction.",
+  },
+  {
+    tag: "REGULATION",
+    title: "Industry groups push for clearer token classification rules",
+    body: "Industry associations representing exchanges, issuers, and investors have renewed calls for clearer rules determining when a token should be treated as a security versus a commodity or other asset class. The distinction matters significantly for how a token can be listed, marketed, and traded, and the current lack of a bright-line test has left many projects operating under legal uncertainty. Proposed frameworks under discussion generally focus on the degree of decentralization a network has reached and whether purchasers reasonably expect profit from the efforts of a central team. Some legal experts argue that a purely binary classification undersells the complexity of how tokens actually function and evolve over time, and have proposed graduated frameworks instead. Whatever approach ultimately gets adopted is expected to have a significant effect on which tokens major exchanges are willing to list, making this one of the more closely watched open regulatory questions in the space.",
+  },
+  {
+    tag: "LAYER2",
+    title: "Rollup transaction fees drop after a network upgrade",
+    body: "Average transaction fees on several major rollup networks have dropped noticeably following a recent upgrade focused on data availability efficiency. The change reduces the amount of data that needs to be posted to the underlying base layer for each batch of transactions, which is the primary driver of rollup fee costs. Early data shows fees for simple transfers down significantly compared to pre-upgrade levels, with more complex smart contract interactions seeing a smaller but still meaningful reduction. Developers building consumer-facing applications have welcomed the change, noting that unpredictable fee spikes have historically been one of the bigger obstacles to onboarding users unfamiliar with crypto. Several teams say the lower and more stable fee environment makes previously uneconomical use cases, like frequent small in-game transactions, viable for the first time. Network operators expect further efficiency gains as additional data availability improvements planned for later this year are rolled out.",
+  },
+  {
+    tag: "LAYER2",
+    title: "A leading L2 crosses a new daily active address milestone",
+    body: "One of the more established layer-2 networks has crossed a new milestone for daily active addresses, continuing a steady growth trend over the past several months. The increase has been attributed to a combination of factors, including expanded incentive programs for both users and liquidity providers, as well as a growing number of applications choosing to deploy natively on the network rather than treating it as a secondary option. Bridge volume into the network has also climbed alongside the address growth, suggesting the increase reflects genuine new usage rather than address churn from incentive farming alone, though some analysts note it can be difficult to fully separate the two. Network fees have remained low despite the higher activity level, which developers point to as evidence the underlying infrastructure is scaling as intended. Competing networks have responded with their own incentive programs, intensifying competition for both users and the applications that serve them.",
+  },
+  {
+    tag: "LAYER2",
+    title: "Modular blockchain designs gain traction among builders",
+    body: "A growing number of new blockchain projects are adopting a modular design, splitting execution, settlement, and data availability into separate specialized layers rather than handling all three within a single monolithic chain. Proponents argue this approach lets each layer be optimized independently, potentially delivering better scalability than trying to improve all functions at once within one system. Several data availability layers built specifically to serve this modular ecosystem have seen rising demand as more rollups choose to post their data there instead of directly to a general-purpose base layer. Critics of the approach point to added complexity for developers, who now need to reason about security assumptions across multiple layers rather than one, and to still-maturing tooling for debugging issues that span layers. Even so, the number of new projects choosing a modular architecture over a monolithic one has grown steadily, suggesting the approach is moving from experimental to mainstream among newer chain launches.",
+  },
+  {
+    tag: "LAYER2",
+    title: "Zero-knowledge proof generation times keep falling",
+    body: "The time required to generate zero-knowledge proofs for rollup transaction batches has continued to fall, driven by a combination of algorithmic improvements and dedicated hardware acceleration. Faster proof generation directly translates into quicker finality for transactions on networks that rely on this technology, narrowing the gap between a transaction being submitted and it being fully and verifiably settled on the base layer. Several teams have introduced specialized hardware, including GPU and custom chip-based provers, that cut generation times well below what general-purpose processors can achieve. The improvements are also lowering the operational cost of running a prover, which some developers say could eventually allow smaller, community-run provers to participate alongside larger dedicated infrastructure operators. Faster and cheaper proving is widely seen as one of the key remaining bottlenecks for zero-knowledge rollups to match the user experience of centralized systems, and progress here is being closely tracked across the ecosystem.",
+  },
+  {
+    tag: "LAYER2",
+    title: "Interoperability protocols see growing cross-chain volume",
+    body: "Protocols designed to move assets and messages between different blockchains have seen a steady rise in volume as more applications adopt multi-chain strategies rather than committing exclusively to a single network. Message-passing protocols, which let smart contracts on one chain trigger actions on another without directly moving assets, have grown particularly quickly as developers look for ways to unify liquidity and user experience across otherwise separate ecosystems. Security remains the central tradeoff in this space, since interoperability protocols have historically been a frequent target for exploits due to the added complexity of verifying cross-chain messages correctly. Several protocols have responded by adopting more conservative security models, including longer settlement delays for larger transfers, accepting slower speed in exchange for a reduced attack surface. Developers building cross-chain applications say the biggest practical challenge remains choosing between the many available interoperability protocols, each with different tradeoffs between speed, cost, and security guarantees.",
+  },
+  {
+    tag: "SECURITY",
+    title: "Hardware wallet adoption keeps climbing among long-term holders",
+    body: "Sales data from major hardware wallet manufacturers show continued growth in adoption among long-term holders, a trend that has held steady even as overall market volatility has fluctuated. Self-custody advocates point to this as a healthy sign, arguing that holders keeping assets in cold storage rather than on exchanges reduces systemic risk in the event of a platform failure. Newer hardware wallet models have also added features aimed at reducing common user errors, including clearer transaction verification screens designed to help users catch a maliciously altered destination address before signing. Educational content around proper seed phrase storage has also proliferated, responding to the fact that lost or improperly stored recovery phrases remain one of the most common ways users permanently lose access to funds, separate from any hack or exploit. Manufacturers report that first-time buyers now make up a growing share of sales, suggesting self-custody practices are spreading beyond the earliest and most technical adopters.",
+  },
+  {
+    tag: "SECURITY",
+    title: "A widely-used wallet library patches a signing vulnerability",
+    body: "Developers maintaining a widely used open-source wallet library have released a patch addressing a vulnerability in how certain transaction types were signed, following a responsible disclosure from an independent security researcher. The issue, if left unpatched, could under specific conditions have allowed a malicious application to request a signature that authorized more than the user intended. No evidence has emerged of the vulnerability being exploited before the patch was released, and the researcher was credited and compensated through the project's bug bounty program. Wallet applications and services built on top of the library are rolling out updates to affected users, and maintainers have urged anyone running an older version to update as soon as possible. The disclosure has renewed broader discussion about the importance of regular dependency audits for wallet software, given how many downstream applications can be affected by a single vulnerability in a shared, widely reused library like this one.",
+  },
+  {
+    tag: "SECURITY",
+    title: "Phishing attempts targeting crypto users rise ahead of a bull run",
+    body: "Security researchers have flagged a noticeable rise in phishing attempts targeting crypto users over the past several weeks, a pattern that has historically tracked closely with periods of renewed market enthusiasm. Common tactics include fake airdrop announcements that direct users to malicious sites designed to steal wallet credentials, as well as browser extensions that closely mimic legitimate wallet software. Several reports also describe fraudulent customer support accounts on social media platforms that respond to genuine user complaints with links to fake resolution pages. Security teams recommend a few consistent habits to reduce risk: never entering a seed phrase into a website, verifying browser extension publishers carefully before installing, and treating unsolicited messages claiming to be from official support channels with skepticism. Exchanges and wallet providers have stepped up user education campaigns in response, though researchers note that attackers continue to adapt their tactics quickly enough that awareness alone is unlikely to eliminate the problem entirely.",
+  },
+  {
+    tag: "SECURITY",
+    title: "Multi-party computation custody gains ground with exchanges",
+    body: "A growing number of exchanges and custodial platforms are adopting multi-party computation, or MPC, technology to secure customer funds, moving away from older models that rely on a single private key or a simple multi-signature setup. MPC splits the cryptographic signing process across multiple independent parties, so that no single party ever holds a complete private key, reducing the risk that a single point of compromise could result in a total loss of funds. Proponents argue the approach also simplifies operational recovery, since losing access to one share does not necessarily mean losing access to funds, unlike traditional single-key custody. Some critics note that MPC systems introduce their own complexity, including the coordination protocols between parties, which themselves need careful security review. Even so, adoption has continued to grow, with several major custodial platforms citing MPC as a core part of their security architecture in recent public disclosures about how customer assets are protected.",
+  },
+  {
+    tag: "SECURITY",
+    title: "Bug bounty payouts hit a record high across major protocols",
+    body: "Total payouts across major crypto bug bounty programs reached a new record over the past year, according to data compiled from several of the largest platforms coordinating these programs. The increase reflects both a growing number of protocols launching formal bounty programs and larger individual payouts for critical vulnerabilities, some reaching into seven figures for the most severe findings. Security researchers point to this as a sign of growing maturity in the space, with protocol teams increasingly viewing well-funded bug bounties as a cost-effective complement to formal audits rather than a replacement for them. A number of the largest payouts this year went to researchers who identified vulnerabilities in cross-chain bridges, a category that has historically been among the most frequently exploited in the industry. Program organizers say the trend toward larger payouts should continue to attract more experienced security researchers to responsibly disclose vulnerabilities rather than exploit them, given the increasingly competitive alternative of selling exploits on illicit markets.",
+  },
+  {
+    tag: "ADOPTION",
+    title: "More payment processors add native stablecoin settlement",
+    body: "Several major payment processors have added native stablecoin settlement options over the past few months, allowing merchants to receive payments that settle near-instantly rather than waiting for traditional card network processing times. Early adopters among merchants cite faster access to funds and reduced exposure to chargeback risk as the main draws, alongside meaningfully lower processing fees compared to traditional card payments in some cases. Processors report that adoption so far has skewed toward merchants already comfortable handling digital assets in some form, though several have begun offering automatic conversion to local currency for merchants who prefer not to hold crypto balances directly. Consumer-facing adoption remains an earlier-stage part of the rollout, with most current volume coming from business-to-business settlement rather than everyday retail purchases. Processors expect that to shift gradually as more point-of-sale integrations mature and consumer-facing wallets make paying with stablecoins as simple as a standard card tap.",
+  },
+  {
+    tag: "ADOPTION",
+    title: "A growing number of fintech apps add crypto balances alongside cash",
+    body: "A number of mainstream fintech apps have added the ability to hold crypto balances directly alongside traditional cash accounts, continuing a trend toward blended banking experiences that treat digital assets as just another balance type rather than a separate specialized feature. The added functionality typically comes through a custody partnership with a licensed third party rather than the fintech company holding assets directly itself, letting the app focus on the user experience while relying on established infrastructure for the underlying custody and compliance work. Onboarding for these features has generally been simplified compared to standalone crypto exchanges, often requiring no additional identity verification beyond what the app already collects for its cash services. Industry observers see this as one of the more significant on-ramps for mainstream adoption, since it removes the friction of signing up for a separate, unfamiliar platform just to hold a small crypto balance alongside money someone already manages daily.",
+  },
+  {
+    tag: "ADOPTION",
+    title: "Remittance corridors increasingly route through stablecoins",
+    body: "A growing share of cross-border remittance volume is being routed through stablecoins as an intermediate step, according to data from several payment infrastructure providers operating in corridors with historically high transfer fees. The typical flow converts local currency to a stablecoin, transfers it near-instantly across borders, then converts back to the recipient's local currency, often completing in minutes rather than the days traditional wire transfers can take. Fee savings compared to legacy remittance channels have been cited as the primary driver, particularly in corridors where traditional providers charge a high percentage of the transfer amount. Adoption has been strongest among providers serving corridors with less developed traditional banking infrastructure on the receiving end, where stablecoin-based rails can sometimes reach recipients that traditional services struggle to serve efficiently. Regulatory treatment of these flows still varies significantly by jurisdiction, and providers say navigating that patchwork remains one of the bigger operational challenges to scaling further.",
+  },
+  {
+    tag: "ADOPTION",
+    title: "Institutional trading desks report rising crypto derivatives volume",
+    body: "Trading desks serving institutional clients report a steady rise in crypto derivatives volume over recent months, with growth concentrated in futures and options used primarily for hedging rather than outright directional speculation. Desk operators describe growing familiarity among institutional clients with crypto-specific instruments, a shift from earlier periods when most institutional interest was limited to simple spot exposure. Deeper order books and tighter spreads on regulated derivatives venues have also made larger trades easier to execute without significant price impact, removing one of the practical barriers that previously discouraged institutional participation. Some desks report that clients are increasingly using crypto derivatives as part of broader multi-asset portfolio strategies rather than treating crypto exposure as an isolated allocation, a sign some analysts read as evidence of deepening integration between crypto markets and traditional finance more broadly. Growth has not been uniform across all client segments, with the largest increases concentrated among clients who were already active in traditional derivatives markets.",
+  },
+  {
+    tag: "ADOPTION",
+    title: "A new wave of tokenized real-world assets goes live",
+    body: "Several new platforms offering tokenized real-world assets have launched in recent weeks, expanding the category beyond the tokenized government debt products that dominated earlier efforts. New offerings include fractionalized real estate, tokenized commodity warehouse receipts, and structured products backed by pools of private credit. Proponents argue tokenization can improve liquidity for traditionally illiquid assets and lower the minimum investment size needed to gain exposure, potentially opening these markets to a wider range of investors. Custody and legal enforceability remain central questions for the category, since a token representing an off-chain asset is only as reliable as the legal and operational framework connecting the two; several platforms have published detailed disclosures addressing exactly how token holders' claims are enforced in the underlying jurisdiction. Analysts covering the space describe it as still early, with total value tokenized this way remaining a small fraction of the broader crypto market, but growing at a faster rate than most other categories.",
+  },
+  {
+    tag: "MINING",
+    title: "Bitcoin mining difficulty adjusts upward again",
+    body: "Bitcoin's mining difficulty adjusted upward again at its most recent scheduled recalibration, reflecting continued growth in total network hashrate despite periodic swings in profitability. Newer generation mining hardware, which offers meaningfully better energy efficiency than equipment from just a few years ago, has allowed operators to remain profitable even as difficulty climbs, provided their electricity costs stay competitive. Several large mining operators have reported shifting a growing share of their energy sourcing toward renewable and otherwise underutilized power, framing it both as a cost advantage and a response to ongoing public scrutiny of the industry's energy use. Smaller, less efficient operations have reportedly struggled to keep pace with the rising difficulty, and industry watchers expect continued consolidation toward larger operators who can access cheaper power and newer hardware at scale. Network security benefits directly from the rising hashrate trend, since a higher total hashrate makes any theoretical attack on the network meaningfully more expensive to attempt.",
+  },
+  {
+    tag: "MINING",
+    title: "Renewable-powered mining sites expand in several regions",
+    body: "Mining operations powered primarily by renewable energy have expanded across several regions, often located near sources of otherwise stranded or curtailed power that would go unused without a nearby buyer. Grid operators in some areas have begun partnering directly with mining companies, using their flexible, easily-interruptible power demand as a tool to help balance grid load during periods of oversupply from intermittent sources like wind and solar. Proponents argue this creates a mutually beneficial arrangement: miners access cheap power, while grid operators gain a flexible demand source that can be curtailed quickly during periods of peak demand elsewhere. Critics remain skeptical of how representative these arrangements are of the industry as a whole, noting that a meaningful share of global mining still relies on grids with a heavier fossil fuel mix. Industry groups have pushed for more standardized reporting of mining's energy sourcing to make region-by-region comparisons easier and more transparent going forward.",
+  },
+  {
+    tag: "MINING",
+    title: "Mining pool concentration draws renewed decentralization debate",
+    body: "Data showing a small handful of mining pools now controlling a majority of total Bitcoin network hashrate has renewed debate over the practical state of mining decentralization. While individual miners within a pool retain their own hardware and can theoretically switch pools at any time, critics note that pool operators still have outsized influence over which transactions get prioritized and how software upgrades are signaled across the network. Pool operators have generally defended the current structure, pointing out that switching between pools is technically simple and that competitive pressure among pools already limits how far any single operator could push its influence before losing hashrate to a rival. Some developers have proposed technical changes that would give individual miners more direct control over transaction selection even while participating in a pool, aiming to reduce the practical concentration of decision-making power without requiring miners to abandon the efficiency benefits of pooling their hashrate together.",
+  },
+  {
+    tag: "MINING",
+    title: "ASIC efficiency gains slow production cost growth",
+    body: "The latest generation of ASIC mining hardware has delivered another meaningful jump in energy efficiency, helping to offset rising difficulty and keep production costs from climbing as quickly as they otherwise would. Chip manufacturers have leaned on smaller process nodes and improved cooling designs to squeeze more computational output from each unit of electricity consumed, a trend that has held steady across several successive hardware generations. Mining operators who have upgraded to the newest hardware report a meaningful reduction in their all-in cost per unit of hashing power, though the high upfront cost of new equipment means the economics still favor operators with access to cheap capital and cheap power simultaneously. Older hardware, while less efficient, often remains profitable enough to keep running in regions with sufficiently low electricity costs, contributing to a wide efficiency gap across the global mining fleet that industry analysts say is unlikely to fully close any time soon.",
+  },
+  {
+    tag: "MINING",
+    title: "Post-halving margins stabilize for larger mining operators",
+    body: "Profit margins for larger, more efficient mining operators have stabilized in the months following the most recent block reward halving, after an initial period of pressure as fixed revenue per block dropped sharply overnight. Operators with access to the cheapest power and newest hardware have generally weathered the transition more comfortably, while smaller or less efficient operations have faced tighter margins and, in some cases, have shut down or sold equipment to larger competitors. Transaction fee revenue has provided a partial offset during periods of high network activity, though it remains a smaller and more variable share of total miner revenue compared to the block subsidy itself. Industry analysts note that this pattern, revenue shock followed by gradual stabilization and consolidation toward efficient operators, has repeated across each of the network's prior halvings, and most operators say they planned their capital expenditure and power contracts well in advance with this expected trajectory in mind.",
+  },
+  {
+    tag: "STABLECOIN",
+    title: "Stablecoin supply climbs back toward its prior peak",
+    body: "The total supply of major stablecoins has climbed steadily over recent months, approaching levels last seen near the previous market cycle's peak. Issuance has picked up across several of the largest stablecoins, generally tracking periods of renewed trading activity, since stablecoins are commonly minted to move capital onto exchanges ahead of anticipated trading opportunities. Redemption flows have remained comparatively modest, suggesting holders are choosing to keep capital in stablecoin form rather than converting back to fiat, which some analysts read as a sign of continued willingness to stay active in the market rather than exiting entirely. Reserve composition across major issuers has also shifted somewhat over the same period, with several issuers increasing the share of reserves held in short-duration government securities rather than commercial paper or other less liquid instruments, a change generally viewed favorably by risk-focused observers tracking the space.",
+  },
+  {
+    tag: "STABLECOIN",
+    title: "A new yield-bearing stablecoin design draws scrutiny",
+    body: "A newly launched stablecoin that automatically distributes yield to holders has drawn both significant deposits and closer scrutiny from risk-focused observers evaluating exactly how that yield is generated and sustained. The design typically involves investing underlying reserves in yield-generating instruments, then passing a portion of that return back to token holders directly, an approach that differs meaningfully from traditional stablecoins that simply hold reserves without distributing any return. Supporters argue the model offers a more capital-efficient way to hold stable value compared to a non-yielding stablecoin sitting idle, while critics point out that any yield-generating reserve strategy introduces additional risk layers, including duration risk and counterparty exposure, that a purely cash-and-treasury-backed model avoids. Transparency around exactly which instruments back the yield, and how quickly reserves could be liquidated under stress, has emerged as the key differentiator investors are using to compare competing designs in this fast-growing subcategory.",
+  },
+  {
+    tag: "STABLECOIN",
+    title: "Cross-chain stablecoin transfers get faster settlement rails",
+    body: "Several major stablecoin issuers have expanded native issuance to additional blockchain networks, reducing reliance on third-party bridges that have historically been a common point of failure for moving stablecoins between chains. Native issuance means a stablecoin exists directly on a given chain rather than being represented there as a wrapped, bridge-dependent token, which removes a layer of smart contract risk from the transfer process. Settlement times for transfers between chains that both have native issuance support have dropped significantly compared to bridge-dependent transfers, in some cases settling in the time it takes a single block to confirm on the destination chain. Developers building applications that rely on stablecoin liquidity across multiple chains have welcomed the change, noting that bridge-related security incidents have historically been one of the more costly categories of exploits in the industry, and reducing reliance on them lowers a meaningful source of systemic risk for the broader ecosystem.",
+  },
+  {
+    tag: "STABLECOIN",
+    title: "Stablecoins increasingly used for on-chain payroll",
+    body: "A growing number of companies with globally distributed, contractor-heavy workforces have begun using stablecoins to handle a portion of their payroll, citing faster settlement and lower fees compared to traditional international wire transfers. Payment platforms built specifically for this use case have added features like batch payments, allowing a company to pay dozens or hundreds of contractors in a single transaction rather than processing each transfer individually. Contractors receiving payment this way report appreciating the speed, often receiving funds within minutes rather than the several business days traditional international transfers can take, particularly when the recipient's local banking infrastructure is less developed. Some companies still convert stablecoin payments to local currency automatically on the recipient's behalf through integrated off-ramp partners, letting contractors receive spendable local currency without needing to interact with crypto directly themselves, which several platforms cite as the feature most responsible for driving broader adoption among contractors less familiar with digital assets.",
+  },
+  {
+    tag: "STABLECOIN",
+    title: "Reserve transparency reports become a competitive differentiator",
+    body: "Stablecoin issuers have increasingly leaned into detailed, frequent reserve transparency reporting as a way to differentiate themselves from competitors, publishing monthly or even more frequent attestations detailing exactly what backs their circulating supply. Some issuers have gone further, integrating on-chain proof-of-reserves tooling that lets anyone independently verify reported holdings in near real time rather than relying solely on periodic third-party attestations. Users and institutional partners alike have cited transparency as an increasingly important factor when choosing which stablecoin to hold or integrate, particularly following past incidents where opacity around reserve composition contributed to a loss of confidence during periods of market stress. Issuers that have historically been less forthcoming about reserve details have faced growing pressure to match the new transparency standard, with several announcing plans to expand their own reporting in response to competitive and user pressure rather than any specific new regulatory requirement forcing the change.",
+  },
+  {
+    tag: "NFT",
+    title: "NFT trading volume ticks up on select blue-chip collections",
+    body: "Trading volume across a handful of long-established NFT collections has ticked up over the past several weeks, reversing a longer stretch of declining activity across the category as a whole. The renewed interest has concentrated heavily in a small number of collections widely considered among the category's most established, while volume for newer and lesser-known collections has remained comparatively muted. Marketplace platforms have responded to the shift with renewed fee competition, with several lowering trading fees or introducing loyalty-style rebate programs aimed at winning back active traders who had shifted attention elsewhere during the quieter period. Floor prices for the collections seeing renewed interest have climbed modestly alongside the volume increase, though they remain well below levels seen at the category's earlier peak. Market participants remain divided on whether the uptick represents the start of a more durable recovery or a shorter-lived pickup tied to broader improved sentiment across crypto markets generally.",
+  },
+  {
+    tag: "NFT",
+    title: "On-chain gaming assets see growing secondary market activity",
+    body: "Secondary market trading of in-game assets represented as on-chain tokens has grown steadily as more games built around player-owned economies reach a critical mass of active users. Unlike traditional in-game items locked to a single title's internal economy, several newer games have designed their assets to be at least partially interoperable, letting certain items retain value or utility across more than one game within a shared ecosystem. Developers building these systems say the appeal for players is straightforward: time and money invested in acquiring in-game assets can translate into something with tradeable value outside the game itself, rather than disappearing entirely if a player stops playing. Critics of the model note that designing genuinely balanced game economies around freely tradeable assets remains a significant unsolved design challenge, since real-money trading can distort gameplay incentives in ways that purely cosmetic or account-bound systems avoid entirely.",
+  },
+  {
+    tag: "NFT",
+    title: "Digital ticketing pilots move onto public blockchains",
+    body: "Several event organizers have launched pilot programs issuing tickets as NFTs on public blockchains, aiming to reduce the fraud and unauthorized resale markups that have long plagued traditional paper and PDF-based ticketing systems. Because each ticket exists as a uniquely verifiable token, organizers can enforce resale rules directly at the protocol level, including capping resale prices or automatically routing a percentage of any resale back to the original event or artist. Early pilots have reported meaningfully lower instances of counterfeit tickets being used for entry compared to prior events using traditional ticketing, since verifying a blockchain-based ticket's authenticity at the door is significantly harder to spoof than checking a printed barcode. Some attendees have expressed friction around needing a compatible wallet to receive and present their ticket, and several organizers have responded by offering simplified, custodial wallet options specifically designed for one-time event attendees unfamiliar with crypto wallets generally.",
+  },
+  {
+    tag: "NFT",
+    title: "Royalty enforcement tools gain adoption among creators",
+    body: "New marketplace-level tools designed to enforce creator royalties on secondary NFT sales have gained adoption following a period where many major marketplaces made royalties optional, leading to a sharp drop in royalty payments actually collected by creators. The newer tools generally work by restricting a token's tradeable venues to marketplaces that agree to honor royalty payments, effectively making it harder to trade the token on non-compliant platforms without losing certain features or metadata. Creator response has been largely positive, with several prominent artists specifically praising the return of reliable royalty income after a period where secondary sales often generated no revenue for the original creator at all. Some collectors have pushed back, arguing that enforced royalties reduce liquidity and add friction to trading compared to fully royalty-free alternatives, reflecting an ongoing tension in the space between creator compensation and frictionless secondary market trading that shows no clear sign of fully resolving.",
+  },
+  {
+    tag: "NFT",
+    title: "Fractionalized collectible ownership platforms see new inflows",
+    body: "Platforms that let multiple buyers pool funds to jointly own a single high-value digital or physical collectible have seen renewed inflows in recent months, extending a niche but persistent corner of the market. The model works by minting fungible tokens representing fractional ownership shares of a single underlying asset, held in shared custody on behalf of all fractional owners. Proponents argue the approach opens access to collectibles that would otherwise be far too expensive for most individual buyers to purchase outright, while also improving liquidity for what would normally be a highly illiquid single asset. Governance around decisions like whether to eventually sell the underlying asset, and at what price, remains one of the more complicated aspects of these platforms, typically requiring some form of on-chain voting among fractional owners. A handful of high-profile successful sales have helped validate the model, though the category overall remains a small niche relative to direct NFT ownership.",
+  },
+  {
+    tag: "MACRO",
+    title: "Crypto markets react to the latest rate decision",
+    body: "Crypto markets moved in tandem with broader risk assets following the latest interest rate decision from a major central bank, extending a correlation pattern that has held fairly consistently over recent policy cycles. Bitcoin and major altcoins both saw increased volatility in the hours surrounding the announcement, with price action broadly tracking moves in equity futures and the dollar index rather than showing any distinctly crypto-specific reaction. Traders point to tightening or loosening financial conditions as a key driver of risk appetite across all speculative assets, crypto included, rather than treating digital assets as fully insulated from traditional macro forces the way some earlier market narratives suggested. Derivatives positioning data shows funding rates and open interest both shifting modestly in the direction of the broader market reaction, suggesting leveraged traders are treating crypto as part of a broader risk-on or risk-off allocation decision rather than trading it in isolation from other asset classes.",
+  },
+  {
+    tag: "MACRO",
+    title: "Inflation data nudges risk appetite across digital assets",
+    body: "The latest inflation print came in close to expectations, prompting a modest but broad-based move across risk assets including crypto, which traders describe as a relief rally following weeks of positioning ahead of the data release. Equities, high-yield credit, and major crypto assets all moved in a similar direction following the release, reinforcing the increasingly tight correlation between crypto and traditional risk assets during periods of significant macro data. Some analysts note that crypto's reaction was somewhat more pronounced in percentage terms than the moves seen in traditional markets, consistent with its historically higher volatility profile amplifying moves in either direction relative to more established asset classes. Options markets had priced in a wider-than-usual range of potential outcomes ahead of the release, and implied volatility across crypto options came down noticeably once the data removed some of that uncertainty, a pattern typical of markets working through a known near-term catalyst.",
+  },
+  {
+    tag: "MACRO",
+    title: "A stronger dollar weighs on emerging-market crypto adoption metrics",
+    body: "A period of broad dollar strength has coincided with softer crypto adoption metrics in several emerging markets, where local currency depreciation against the dollar has historically been a meaningful driver of stablecoin and crypto demand as a hedge. Somewhat counterintuitively, some analysts note that a stronger dollar can initially dampen local crypto activity by making dollar-pegged stablecoins comparatively more expensive to acquire in local currency terms, even though the underlying motivation to seek dollar exposure through crypto rails often increases over the same period. Payment providers operating in affected regions report mixed signals, with transaction volume for smaller, more frequent transfers softening somewhat while larger transfers aimed at longer-term capital preservation have held relatively steady. The overall picture suggests currency-driven crypto demand in these markets responds to more than just the direction of the dollar alone, with local economic conditions and capital control policy playing an equally significant role in shaping actual usage patterns.",
+  },
+  {
+    tag: "MACRO",
+    title: "Bond yield moves ripple into crypto derivatives pricing",
+    body: "Recent moves in government bond yields have rippled into crypto derivatives markets, with funding rates and futures basis both adjusting in response to shifting expectations around the broader interest rate environment. Higher yields on traditional low-risk assets tend to raise the opportunity cost of holding non-yielding assets like Bitcoin, a dynamic several analysts point to when explaining periods where crypto has underperformed alongside rising rates. Conversely, periods where yields have pulled back have often coincided with improved crypto performance, consistent with the same underlying opportunity-cost logic working in reverse. Carry trade strategies that borrow in low-yielding currencies to fund positions in higher-yielding or higher-beta assets, including crypto, have also shown sensitivity to these yield moves, with several large unwinds of such trades coinciding with periods of outsized crypto volatility historically. Traders increasingly monitor bond markets as a leading indicator worth watching alongside crypto-specific data when assessing near-term directional risk.",
+  },
+  {
+    tag: "MACRO",
+    title: "Global liquidity conditions loosen, lifting risk assets broadly",
+    body: "A broad loosening in global liquidity conditions, driven by a combination of central bank balance sheet trends and easing financial conditions across several major economies, has coincided with a lift in risk assets generally, crypto included. Analysts who track the relationship between global liquidity and crypto describe Bitcoin in particular as behaving like a high-beta liquidity proxy, tending to outperform during periods of expanding global liquidity and underperform during periods of contraction. The current loosening trend has been gradual rather than sharp, and crypto's reaction so far has been similarly measured compared to some past cycles where more aggressive liquidity expansion coincided with sharper crypto rallies. Market participants caution that liquidity conditions can shift quickly in response to new data or policy signals, and note that the current relatively calm environment should not be read as a guarantee that the recent gradual, steady trend will necessarily continue uninterrupted.",
+  },
+  {
+    tag: "EXCHANGE",
+    title: "Order book depth improves across major trading pairs",
+    body: "Order book depth across several major trading pairs has improved noticeably over recent months, a trend market makers attribute to a combination of growing overall market participation and targeted incentive programs designed specifically to attract deeper liquidity provision. Tighter bid-ask spreads have followed the improved depth, benefiting traders executing larger orders who previously faced more significant price impact when moving size in thinner markets. Several exchanges have introduced or expanded market maker rebate programs specifically aimed at rewarding firms that consistently provide two-sided liquidity close to the best available price, rather than rewarding raw volume alone regardless of how tight the quotes are. The improved depth has been most pronounced in the most actively traded pairs, while less popular pairs continue to show comparatively thinner books, a pattern that has remained fairly consistent across market cycles regardless of overall market conditions.",
+  },
+  {
+    tag: "EXCHANGE",
+    title: "A leading exchange rolls out lower fees for high-volume traders",
+    body: "One of the larger crypto exchanges has introduced a revised fee schedule offering meaningfully lower rates for high-volume traders, part of a broader competitive push among major platforms to retain active users increasingly willing to move volume to whichever venue offers the best pricing. The new tiered structure rewards traders who maintain consistent monthly volume above set thresholds with progressively lower maker and taker fees, alongside additional rebates for traders who provide passive liquidity rather than taking it. Smaller retail traders below the highest volume tiers see comparatively modest changes under the new schedule, meaning the update is primarily targeted at retaining the most active trading desks and algorithmic strategies that account for a disproportionate share of total exchange volume. Competing platforms are reportedly reviewing their own fee structures in response, a pattern that has repeated periodically as exchanges compete for the same relatively limited pool of consistently high-volume traders.",
+  },
+  {
+    tag: "EXCHANGE",
+    title: "Proof-of-reserves audits become standard practice industry-wide",
+    body: "Regular proof-of-reserves audits, once a differentiating feature offered by only a handful of exchanges, have become close to standard practice across the industry following a period of heightened user scrutiny of exchange solvency. Most major platforms now publish some combination of third-party attestations and on-chain verification tools that let users independently confirm the exchange holds sufficient assets to cover customer liabilities at a given point in time. Critics of current practices note that most audits remain point-in-time snapshots rather than continuous, real-time verification, meaning a platform could theoretically appear solvent during an audit while temporarily borrowing assets specifically to pass it. Some newer verification approaches aim to address this gap using cryptographic techniques that make it harder to misrepresent holdings even briefly, though these more rigorous methods have not yet been universally adopted. Users increasingly cite the availability and quality of proof-of-reserves reporting as a factor in choosing which exchange to trust with custody of their assets.",
+  },
+  {
+    tag: "EXCHANGE",
+    title: "API trading volume grows as more bots enter the market",
+    body: "Volume executed through exchange APIs rather than manual trading interfaces has grown steadily, reflecting a rising share of overall trading activity driven by automated strategies rather than individual traders manually placing orders. Exchanges have responded by upgrading API infrastructure, including higher rate limits and lower-latency order execution paths specifically aimed at serving algorithmic traders who depend on fast, reliable execution to run their strategies effectively. Retail-accessible bot platforms have also grown in popularity, letting individual traders run relatively simple automated strategies, like grid trading or dollar-cost averaging, without needing to write custom code themselves. Exchange operators note that API-driven volume tends to be more consistent across varying market conditions compared to manual retail volume, which tends to spike sharply during periods of high volatility and taper off during quieter stretches, giving automated volume an increasingly important role in maintaining consistent liquidity across all market conditions.",
+  },
+  {
+    tag: "EXCHANGE",
+    title: "Cross-exchange arbitrage spreads narrow as liquidity deepens",
+    body: "Price discrepancies for the same asset across different exchanges have narrowed measurably as overall market liquidity has deepened, reducing the profit margins available to traders running classic cross-exchange arbitrage strategies. Faster settlement rails between exchanges, including improved stablecoin transfer speeds, have also played a role, shrinking the window during which meaningful price gaps can persist before arbitrageurs close them. Professional market-making and arbitrage firms report that competition within the strategy itself has intensified as more capital has entered the space chasing the same shrinking spreads, pushing some firms to look toward less crowded, more complex multi-leg strategies to maintain profitability. For everyday traders, the practical effect of narrower spreads is a more consistent, unified price across venues, reducing the odds of noticeably overpaying or underselling simply due to which specific exchange an order happens to be routed through at a given moment.",
+  },
+  {
+    tag: "PRODUCT",
+    title: "Grid bots now support tighter range configurations",
+    body: "Grid bots on the platform now support noticeably tighter price-step configurations, giving traders finer control over how closely spaced each buy and sell level is within a chosen price range. The change is particularly useful in genuinely range-bound markets, where a tighter grid can capture more individual round trips within the same overall price movement compared to a wider-spaced configuration covering the same range. Backtests run against recent historical data show the tighter configurations generating a higher number of completed cycles during low-volatility stretches, though each individual cycle naturally captures a smaller amount of profit given the reduced price gap between levels. As with any grid configuration, a tighter setup also means faster exhaustion of available capital if price moves persistently in one direction outside the configured range, so the update includes updated guidance in the bot creation flow to help traders think through that tradeoff before launching a tighter grid than they might have used previously.",
+  },
+  {
+    tag: "PRODUCT",
+    title: "Bot fill feeds now update in real time",
+    body: "Every bot's fill feed now updates in real time rather than requiring a manual page refresh to see the latest executed trades, giving traders a live view of exactly what their bot is doing as it happens. The change replaces the previous polling-based refresh with a persistent live connection, meaning a new fill appears in the feed within moments of actually executing rather than waiting for the next scheduled refresh interval. Traders monitoring active bots during volatile periods, when fills can happen in quick succession, should notice the most immediate benefit, since the feed now keeps pace with genuinely fast-moving activity instead of lagging noticeably behind it. The underlying fill history and all other bot data remain exactly the same as before; this update only changes how quickly new activity shows up on screen once it has already happened, not what gets recorded in the first place.",
+  },
+  {
+    tag: "PRODUCT",
+    title: "New pairs added to the available bot markets",
+    body: "A number of new trading pairs have been added to the set of markets available for bot deployment, expanding coverage based on trader demand and each pair's underlying liquidity depth on the exchange the platform executes through. Each newly added pair goes through the same liquidity and volatility review as existing supported pairs before being made available, ensuring bots deployed against it have a reasonable chance of executing cleanly without excessive slippage on either side of a trade. Traders with existing bots on already-supported pairs are unaffected by the addition; the update only expands what is available when creating a brand-new bot going forward. Feedback requesting which pairs to prioritize next continues to be gathered directly from active traders, and pairs with consistently strong liquidity and steady trading interest remain the most likely candidates for the next round of additions to the available markets list.",
+  },
+  {
+    tag: "PRODUCT",
+    title: "Portfolio history charting gets smoother data buckets",
+    body: "The portfolio history chart on the home screen now uses smoother, more evenly distributed data buckets across each of its four range options, improving how accurately the chart's overall shape reflects actual balance movement over the selected period. Previously, buckets could occasionally cluster unevenly depending on when specific balance-changing events happened to occur, sometimes making the chart line look choppier than the underlying balance history actually was. The updated bucketing logic evens this out, producing a cleaner line that more faithfully represents the general trend across the selected time range without smoothing away genuinely significant swings in balance. The percentage change figure shown alongside the chart is calculated the same way as before, comparing the first and last data points in the selected range; only the visual shape of the line connecting those points, and everything in between, has been refined by this update.",
+  },
+  {
+    tag: "PRODUCT",
+    title: "Dark mode refinements roll out across every screen",
+    body: "A round of dark mode refinements has rolled out across every screen in the app, tightening up contrast ratios and refining focus-state styling that had been slightly inconsistent between light and dark themes in a handful of places. The update touches surface colors, border treatments, and status-indicator colors across dozens of components, aiming for a dark theme that feels genuinely designed for low-light viewing rather than a simple color inversion of the light theme. Transitions between light and dark mode, triggered either by the manual toggle in the menu or by a change in system-level preference, now animate smoothly rather than snapping instantly, matching how other theme-driven color changes already behaved elsewhere in the app. No functional behavior changes with this update; every affected screen continues to work exactly as before, with only the visual presentation refined across both supported themes.",
+  },
+];
+
+// Adds a photo to each article above by cycling through NEWS_IMAGES —
+// article i gets NEWS_IMAGES[i % NEWS_IMAGES.length], so with 45 images
+// and 60 articles the last 15 articles simply reuse an earlier photo.
+const NEWS_POOL = NEWS_ARTICLES.map((article, i) => ({
+  ...article,
+  image: NEWS_IMAGES[i % NEWS_IMAGES.length],
+}));
+
+// How many of NEWS_POOL's 60 articles show up in a given day's News tab.
+const NEWS_PER_DAY = 10;
+
+// Plausible "time ago" labels applied by list position (index 0 = the
+// first/newest card) rather than stored per article — see the comment
+// where this is used in NewsSection for why a fixed per-article
+// timestamp doesn't make sense once the visible 10 rotate daily. Matches
+// NEWS_PER_DAY in length; if you change NEWS_PER_DAY, extend or trim
+// this list to match.
+const NEWS_TIME_LABELS = ["1h ago", "3h ago", "5h ago", "8h ago", "12h ago", "1d ago", "1d ago", "2d ago", "3d ago", "4d ago"];
+
 // How many coins show up in the Hots / Spots tabs below — a small,
 // decorative-widget-sized slice of the full markets feed (which has 300+
 // rows on MarketsPage), matching Bybit's home-screen markets widget rather
@@ -809,11 +1208,11 @@ const MARKET_FEED_ROWS = 5;
 function NewsSection({ markets, t }) {
   const [feedTab, setFeedTab] = useState("news"); // one of "news" | "hots" | "spots"
 
-  const sampleItems = [
-    { tag: "MARKET", title: "BTC holds above key support after weekend volatility", meta: "2h ago" },
-    { tag: "PRODUCT", title: "Grid bots now support tighter range configurations", meta: "1d ago" },
-    { tag: "MARKET", title: "ETH network activity climbs into the new week", meta: "2d ago" },
-  ];
+  // Today's 10 articles out of the 60-article NEWS_POOL — see pickDaily's
+  // comment above for how the daily rotation works; "news" is a distinct
+  // salt from the ads carousel's "ads" salt so the two rotate
+  // independently rather than picking in lockstep on the same day.
+  const newsItems = useMemo(() => pickDaily(NEWS_POOL, NEWS_PER_DAY, "news"), []);
 
   // Hots: no re-sort needed, `markets` already arrives most-traded-first.
   // Spots: a fresh sorted copy (spread before .sort — .sort mutates in
@@ -833,25 +1232,13 @@ function NewsSection({ markets, t }) {
 
       {feedTab === "news" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-          {sampleItems.map((item, i) => (
-            <div
-              key={i}
-              style={{
-                background: "var(--cream-deep)",
-                border: "1px solid var(--cream-line)",
-                borderRadius: "var(--radius-lg)",
-                padding: "12px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-3)",
-              }}
-            >
-              <span style={{ fontFamily: "var(--font-data)", fontSize: "9px", letterSpacing: "0.05em", color: "var(--teal-base)" }}>
-                {item.tag}
-              </span>
-              <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "12.5px", color: "var(--ink-base)" }}>{item.title}</span>
-              <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>{item.meta}</span>
-            </div>
+          {newsItems.map((item, i) => (
+            // NEWS_TIME_LABELS[i] rather than a time stored per-article —
+            // which 10 articles are showing changes every day, so a fixed
+            // per-article timestamp would drift out of sync with reality
+            // fast; generating "how long ago" from the card's position in
+            // today's already-newest-first list always looks current.
+            <NewsCard key={item.title} article={item} timeLabel={NEWS_TIME_LABELS[i] ?? NEWS_TIME_LABELS[NEWS_TIME_LABELS.length - 1]} />
           ))}
         </div>
       )}
@@ -868,6 +1255,76 @@ function NewsSection({ markets, t }) {
         )
       )}
     </div>
+  );
+}
+
+// One row inside the News tab — Bybit's own news list uses this same
+// shape: a square thumbnail next to a tag/headline/timestamp stack,
+// collapsed by default. There's no article-reader page in this app (this
+// is decorative preview content, not a real news feed), so rather than
+// building out a whole new route just to show ~150 words of fake copy,
+// tapping the row expands it in place to reveal the full body — same
+// idea as a Bybit list row navigating to a full article, adapted to not
+// need a second screen.
+function NewsCard({ article, timeLabel }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-3)",
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "12px 14px",
+        textAlign: "left",
+        cursor: "pointer",
+        // Reset button-element defaults so this reads as a card, not a
+        // native button — same pattern QuickTile/BotCard use via <Link>,
+        // just on a <button> here since there's no route to navigate to.
+        font: "inherit",
+        color: "inherit",
+      }}
+    >
+      <div style={{ display: "flex", gap: "var(--space-6)" }}>
+        <img
+          src={article.image}
+          alt=""
+          width={56}
+          height={56}
+          style={{ width: 56, height: 56, borderRadius: "var(--radius-sm)", objectFit: "cover", flexShrink: 0 }}
+        />
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", minWidth: 0 }}>
+          <span style={{ fontFamily: "var(--font-data)", fontSize: "9px", letterSpacing: "0.05em", color: "var(--teal-base)" }}>
+            {article.tag}
+          </span>
+          <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "12.5px", color: "var(--ink-base)" }}>
+            {article.title}
+          </span>
+          <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>{timeLabel}</span>
+        </div>
+      </div>
+
+      {expanded && (
+        <p
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-body)",
+            fontSize: "12px",
+            lineHeight: 1.6,
+            color: "var(--ink-soft)",
+            paddingTop: "var(--space-3)",
+            borderTop: "1px solid var(--cream-line)",
+          }}
+        >
+          {article.body}
+        </p>
+      )}
+    </button>
   );
 }
 

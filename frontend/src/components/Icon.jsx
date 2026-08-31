@@ -191,6 +191,12 @@ const ICONS = {
   chevronRight: {
     outline: (color) => <path d="M9 5l7 7-7 7" stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />,
   },
+  // Used by SelectField.jsx's collapsed trigger button (coin/network
+  // dropdown pickers) — a downward chevron indicating "tap to open a list
+  // of choices", the same role a native <select>'s arrow plays.
+  chevronDown: {
+    outline: (color) => <path d="M5 9l7 7 7-7" stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />,
+  },
   moreDots: {
     outline: (color) => (
       <>

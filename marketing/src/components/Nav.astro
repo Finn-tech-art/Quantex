@@ -29,6 +29,15 @@
 // markup/CSS below. If a third legal doc is ever added (e.g. a cookie
 // policy), just add one more <a> inside .qx-dropdown-menu; the dropdown
 // sizes itself automatically.
+//
+// Below 720px, .qx-links (all the real nav content — every link plus the
+// two dropdowns) stops being a horizontal row and becomes a hidden
+// slide-down panel instead, opened by the hamburger button
+// (.qx-menu-toggle) that only exists in the DOM for that same width. This
+// is the one bit of this file that needs real JavaScript rather than
+// CSS-only hover/focus — see the <script> at the bottom for why (short
+// version: iOS Safari doesn't focus a plain <button> on tap, so the
+// desktop dropdowns' :focus-within trick alone never fires there).
 const APP_URL = "https://trading.onquantex.com";
 ---
 
@@ -39,7 +48,7 @@ const APP_URL = "https://trading.onquantex.com";
       <span>Quantex</span>
     </a>
 
-    <nav class="qx-links" aria-label="Primary">
+    <nav class="qx-links" id="qx-mobile-nav" aria-label="Primary">
       <a href="#markets">Markets</a>
       <a href="/security">Security</a>
       <a href="/about">About</a>
@@ -138,6 +147,24 @@ const APP_URL = "https://trading.onquantex.com";
         </div>
       </div>
     </nav>
+
+    <!--
+      Only present visually below 720px (see .qx-menu-toggle in the CSS) —
+      above that width .qx-links is already a normal horizontal row and
+      this button isn't needed. It's still in the DOM at every width so
+      there's nothing conditionally rendered server-side to keep in sync.
+    -->
+    <button
+      type="button"
+      class="qx-menu-toggle"
+      aria-expanded="false"
+      aria-controls="qx-mobile-nav"
+      aria-label="Menu"
+    >
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+      </svg>
+    </button>
 
     <div class="qx-actions">
       <a class="qx-btn-secondary" href={`${APP_URL}/login`}>Log in</a>
@@ -283,15 +310,37 @@ const APP_URL = "https://trading.onquantex.com";
     align-items: center;
     gap: var(--space-10);
     flex-shrink: 0;
+    /* Keeps the buttons from ever sitting flush against whatever's to
+       their left — on desktop that's .qx-links (which already has its
+       own gap from .qx-nav-inner), on mobile it's the hamburger button
+       right next to it, which had no breathing room of its own before. */
+    margin-left: var(--space-10);
   }
+
+  /* Hidden by default (desktop) — only shown inside the 720px media query
+     below. A plain reset button, same approach as .qx-dropdown-trigger:
+     no visible border/background of its own, just the SVG icon inside. */
+  .qx-menu-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--ink-base);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .qx-menu-toggle:hover {
+    color: var(--teal-base);
+  }
+
   @media (max-width: 720px) {
-    .qx-links {
-      display: none;
-    }
-    /* Shorter bar and smaller wordmark once the link list is gone — the
-       72px height was sized to comfortably fit the full link row, which
-       no longer exists at this width, so keeping it that tall just wastes
-       vertical space above the fold on a phone. */
+    /* Shorter bar and smaller wordmark to make room for the hamburger —
+       the 72px height was sized for the full desktop link row. */
     .qx-nav-inner {
       height: 56px;
     }
@@ -302,13 +351,88 @@ const APP_URL = "https://trading.onquantex.com";
       width: 24px;
       height: 24px;
     }
+    .qx-menu-toggle {
+      display: inline-flex;
+    }
+
+    /* .qx-links becomes a slide-down panel instead of a horizontal row:
+       hidden by default (this rule), shown only once the hamburger above
+       adds .qx-nav-open to the <header> (see .qx-nav.qx-nav-open below
+       and the <script> at the end of this file). It's positioned to hang
+       directly under the header, full width, as its own scrollable card
+       rather than squeezed into the header's own 56px height. */
+    .qx-links {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+      max-height: calc(100vh - 56px);
+      overflow-y: auto;
+      background: var(--cream-deep);
+      border-bottom: 1px solid var(--cream-line);
+      box-shadow: var(--shadow-dropdown);
+      padding: var(--space-8);
+    }
+    .qx-nav.qx-nav-open .qx-links {
+      display: flex;
+    }
+    .qx-links a {
+      padding: var(--space-10) var(--space-8);
+      border-radius: var(--radius-sm);
+    }
+    .qx-links a:hover {
+      background: var(--cream-line);
+    }
+
+    /* The "More"/"Legal" dropdowns switch from a floating hover panel to
+       an inline accordion that stacks underneath their own trigger —
+       floating them absolutely, centered under a button, would push them
+       half off-screen inside a full-width mobile panel. Opened by tapping
+       the trigger, same as before, but via a real click listener (see the
+       <script> below) rather than :hover/:focus-within — iOS Safari does
+       not focus a plain <button> on tap, so :focus-within alone never
+       fires there and the menu would never open on an iPhone. */
+    .qx-dropdown-trigger {
+      width: 100%;
+      justify-content: space-between;
+      padding: var(--space-10) var(--space-8);
+      border-radius: var(--radius-sm);
+    }
+    .qx-dropdown-trigger:hover {
+      background: var(--cream-line);
+    }
+    .qx-dropdown-menu {
+      position: static;
+      transform: none;
+      padding-top: 0;
+      display: none;
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      min-width: 0;
+    }
+    .qx-dropdown.qx-open .qx-dropdown-menu {
+      display: flex;
+    }
+    .qx-dropdown.qx-open .qx-dropdown-chevron {
+      transform: rotate(180deg);
+    }
+    .qx-dropdown-menu-inner {
+      border: none;
+      box-shadow: none;
+      padding: 0 0 0 var(--space-8);
+    }
   }
   @media (max-width: 400px) {
     /* Below ~400px even "Log in" + "Trade Now" side by side gets tight —
        shrink the buttons' own padding rather than drop "Log in"
        entirely, so both stay one tap away. */
     .qx-actions {
-      gap: var(--space-6);
+      gap: var(--space-8);
     }
     /* No :global() needed — these two <a> tags are part of THIS
        component's own template above, so Astro already scopes them to
@@ -320,3 +444,47 @@ const APP_URL = "https://trading.onquantex.com";
     }
   }
 </style>
+
+<script>
+  // Mobile hamburger menu. The only real client-side interactivity in
+  // this component — everything else (the desktop dropdowns) is
+  // deliberately CSS-only hover/focus, see their comments above for why.
+  // This exists because there's no CSS-only way to open/close an
+  // absolutely-positioned panel from a button tap, and because iOS Safari
+  // specifically doesn't focus a plain <button> on tap (so :focus-within
+  // never fires there), which rules out reusing the desktop dropdown
+  // trick for the "More"/"Legal" menus at this width too.
+  const nav = document.querySelector(".qx-nav");
+  const menuToggle = document.querySelector<HTMLButtonElement>(".qx-menu-toggle");
+  const mobileNav = document.getElementById("qx-mobile-nav");
+
+  menuToggle?.addEventListener("click", () => {
+    const isOpen = nav?.classList.toggle("qx-nav-open") ?? false;
+    menuToggle.setAttribute("aria-expanded", String(isOpen));
+  });
+
+  // Accordion behavior for the "More"/"Legal" triggers. Guarded to only
+  // run below 720px so it never interferes with the desktop hover/focus
+  // dropdowns above that width — this listener still fires on a desktop
+  // click, it just no-ops there.
+  document.querySelectorAll<HTMLButtonElement>(".qx-dropdown-trigger").forEach((trigger) => {
+    trigger.addEventListener("click", () => {
+      if (window.innerWidth > 720) return;
+      const dropdown = trigger.closest(".qx-dropdown");
+      const isOpen = dropdown?.classList.toggle("qx-open") ?? false;
+      trigger.setAttribute("aria-expanded", String(isOpen));
+    });
+  });
+
+  // Closes the whole mobile panel after tapping any real link inside it
+  // (including ones inside the More/Legal accordions), so navigating —
+  // or jumping to a same-page anchor like #markets, which wouldn't
+  // otherwise trigger a page load to reset anything — doesn't leave the
+  // panel sitting open over the page you land on.
+  mobileNav?.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", () => {
+      nav?.classList.remove("qx-nav-open");
+      menuToggle?.setAttribute("aria-expanded", "false");
+    });
+  });
+</script>

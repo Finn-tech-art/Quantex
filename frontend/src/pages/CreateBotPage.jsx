@@ -9,18 +9,36 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
-import { Field, ErrorText, PrimaryButton } from "../components/FormControls";
+import CoinGlyph from "../components/CoinGlyph";
+import SelectField from "../components/SelectField";
+import { ErrorText, PrimaryButton } from "../components/FormControls";
 import { createBot } from "../lib/api";
+
+// The only pairs a scripted bot can actually run on — a bot's pair has to
+// exist in market_data_feed.py's TRACKED_SYMBOLS (mirrored here exactly
+// like TradePage.jsx's own PAIRS list already has to be, per that file's
+// comment) or bot_engine.py's sweep just silently never finds a price for
+// it and the bot never trades. This used to be a free-text field a user
+// could type ANYTHING into — including a pair that would create a bot
+// stuck doing nothing forever — which is why this is now a constrained
+// dropdown instead. Add a pair here AND to TradePage.jsx's PAIRS AND to
+// the backend's trading_service.SUPPORTED_PAIRS AND
+// market_data_feed.TRACKED_SYMBOLS together, or it either 400s or silently
+// never runs.
+const PAIRS = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
+
+function baseAsset(pair) {
+  return pair.split("/")[0];
+}
 
 export default function CreateBotPage() {
   const { t } = useTranslation();
   const { accessToken } = useAuth();
   const navigate = useNavigate();
 
-  const [pair, setPair] = useState("BTC/USDT");
+  const [pair, setPair] = useState(PAIRS[0]);
   const [allocationAmount, setAllocationAmount] = useState("100");
   const [sessionLengthMinutes, setSessionLengthMinutes] = useState("10");
-  const [intervalMinutes, setIntervalMinutes] = useState("15");
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -33,7 +51,14 @@ export default function CreateBotPage() {
         pair,
         allocationAmount, // stays a string all the way to the backend — see api.js's comment
         sessionLengthMinutes: Number(sessionLengthMinutes),
-        intervalSeconds: Number(intervalMinutes) * 60,
+        // No intervalSeconds passed here on purpose — this used to be a
+        // "Minutes between sessions" field the user could edit, but
+        // nothing in this form's flow actually surfaced what changing it
+        // did (it's a non-functional control for now), so it's been
+        // removed rather than left on screen doing nothing visible.
+        // Omitting it lets createBot()'s own default (900s / 15 minutes,
+        // matching the backend's own CreateSimulatedBotRequest default in
+        // models/bot.py) apply instead.
       });
       navigate(`/bots/${res.id}`);
     } catch (err) {
@@ -75,7 +100,13 @@ export default function CreateBotPage() {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
-          <Field label={t("bots.create.pairLabel")} type="text" value={pair} onChange={setPair} />
+          <SelectField
+            label={t("bots.create.pairLabel")}
+            value={pair}
+            options={PAIRS}
+            onChange={setPair}
+            renderIcon={(p) => <CoinGlyph asset={baseAsset(p)} size={20} />}
+          />
 
           <NumberFieldWithHint
             label={t("bots.create.allocationLabel")}
@@ -91,14 +122,6 @@ export default function CreateBotPage() {
             value={sessionLengthMinutes}
             onChange={setSessionLengthMinutes}
             min="5"
-            step="1"
-          />
-          <NumberFieldWithHint
-            label={t("bots.create.intervalLabel")}
-            hint={t("bots.create.intervalHint")}
-            value={intervalMinutes}
-            onChange={setIntervalMinutes}
-            min="1"
             step="1"
           />
 

@@ -183,8 +183,6 @@ const resources = {
           allocationHint: 'Minimum $50.',
           sessionLengthLabel: 'Session length (minutes)',
           sessionLengthHint: 'Minimum 5 — shorter sessions don’t leave the engine enough real price history to work with.',
-          intervalLabel: 'Minutes between sessions',
-          intervalHint: 'Minimum 1 minute.',
           submit: 'Create bot',
           creating: 'Creating…',
         },

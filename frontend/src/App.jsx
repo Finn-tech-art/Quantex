@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import { AdminAuthProvider } from "./context/AdminAuthContext";
@@ -116,7 +116,16 @@ function App() {
 
             {/* Admin — a separate credential from the regular user routes
                 above (see AdminAuthContext.jsx); /admin/login is public,
-                everything else under /admin requires an admin session. */}
+                everything else under /admin requires an admin session.
+                Bare "/admin" (the URL anyone types first) previously had no
+                matching route at all, which rendered nothing — a blank
+                page with no clue what went wrong. Redirecting it to
+                /admin/overview isn't a security shortcut: that route is
+                itself wrapped in AdminProtectedRoute below, so an
+                unauthenticated visit still bounces on to /admin/login —
+                this just gives bare "/admin" ANY sensible destination
+                instead of none. */}
+            <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
             <Route path="/admin/login" element={<AdminLoginPage />} />
             <Route
               path="/admin/overview"

@@ -53,7 +53,7 @@ export default function AdminWithdrawalsQueuePage() {
             onClick={logout}
             style={{ background: "none", border: "none", fontFamily: "var(--font-body)", fontSize: "12px", color: "var(--ink-soft)", cursor: "pointer" }}
           >
-            {t("admin.winRate.logout")}
+            {t("admin.withdrawals.logout")}
           </button>
         </div>
 
@@ -280,7 +280,7 @@ function WithdrawalDetail({ withdrawalId, adminToken, onBack, onDecided, t }) {
         </button>
         <div style={{ flex: 1 }}>
           <PrimaryButton type="button" onClick={handleApprove} submitting={deciding !== null}>
-            {t("admin.withdrawals.approve")}
+            {deciding === "approve" ? t("admin.withdrawals.approving") : t("admin.withdrawals.approve")}
           </PrimaryButton>
         </div>
       </div>

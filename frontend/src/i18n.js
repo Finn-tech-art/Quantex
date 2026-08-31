@@ -230,6 +230,10 @@ const resources = {
       },
       admin: {
         nav: {
+          // Label shown on AdminNav's collapsed hamburger-menu trigger
+          // whenever the current path isn't one of the entries below (e.g.
+          // briefly while a page is loading) — see AdminNav.jsx.
+          menu: 'Menu',
           overview: 'Overview',
           winRate: 'Win rate',
           kyc: 'KYC queue',
@@ -303,6 +307,7 @@ const resources = {
         },
         kyc: {
           title: 'KYC queue',
+          logout: 'Log out',
           empty: 'No submissions waiting on review.',
           backToQueue: '← Back to queue',
           submittedAt: 'Submitted {{date}}',
@@ -321,6 +326,7 @@ const resources = {
         },
         withdrawals: {
           title: 'Withdrawal queue',
+          logout: 'Log out',
           empty: 'No withdrawals waiting on review.',
           backToQueue: '← Back to queue',
           requestedAt: 'Requested {{date}}',

@@ -49,7 +49,7 @@ export default function AdminKycQueuePage() {
             onClick={logout}
             style={{ background: "none", border: "none", fontFamily: "var(--font-body)", fontSize: "12px", color: "var(--ink-soft)", cursor: "pointer" }}
           >
-            {t("admin.winRate.logout")}
+            {t("admin.kyc.logout")}
           </button>
         </div>
 
@@ -264,7 +264,7 @@ function SubmissionDetail({ submissionId, adminToken, onBack, onDecided, t }) {
         </button>
         <div style={{ flex: 1 }}>
           <PrimaryButton type="button" onClick={handleApprove} submitting={deciding !== null}>
-            {t("admin.kyc.approve")}
+            {deciding === "approve" ? t("admin.kyc.approving") : t("admin.kyc.approve")}
           </PrimaryButton>
         </div>
       </div>

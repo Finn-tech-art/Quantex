@@ -138,7 +138,16 @@ export function PrimaryButton({ children, submitting, type = "submit", onClick }
         opacity: submitting ? 0.8 : 1,
       }}
     >
-      {submitting ? <AnimatedPsi mode="working" size={18} color="var(--on-accent)" /> : children}
+      {/* Previously the spinner REPLACED children while submitting, which
+          silently discarded any "Saving…"/"Approving…" label a caller
+          passed in — the button just showed a bare spinner with no text.
+          Rendering both together (spinner first, label after, joined by
+          the gap above) means a caller can still pass plain unchanging
+          text (e.g. "Save") and get a label-less-but-clear spinner state,
+          or pass a submitting-aware label (e.g. saving ? "Saving…" :
+          "Save") and have that text actually show up next to the spinner. */}
+      {submitting && <AnimatedPsi mode="working" size={18} color="var(--on-accent)" />}
+      {children}
     </button>
   );
 }

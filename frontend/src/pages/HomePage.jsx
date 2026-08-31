@@ -13,20 +13,27 @@
 //                              portfolio_history_service.py — derived live
 //                              from the ledger, no snapshot table)
 //   - listBots()             -> the Active bots section
-// Leaderboard and News have no real data source yet (no trader-ranking
-// system, no news feed) — per the design discussion for this screen, both
-// render clearly PREVIEW-tagged sample content rather than being cut, so
-// the full screen composition is visible now and can be wired to a real
-// source later without a layout change.
-import { useEffect, useId, useRef, useState } from "react";
+//   - getMarkets()           -> the Hots/Spots tabs inside the News widget
+//                              (see backend/app/routers/market.py) — same
+//                              feed MarketsPage.jsx's full list uses
+// Leaderboard has no real data source yet (no trader-ranking system) —
+// per the design discussion for this screen, it renders clearly
+// PREVIEW-tagged sample content rather than being cut, so the full screen
+// composition is visible now and can be wired to a real source later
+// without a layout change. The News tab (inside the News/Hots/Spots widget
+// below Leaderboard) is the same situation — no news feed exists yet — but
+// Hots and Spots, its two sibling tabs, are both real live data.
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
+import CoinLogo from "../components/CoinLogo";
 import DeltaChip from "../components/DeltaChip";
 import Icon from "../components/Icon";
+import NotificationBell from "../components/NotificationBell";
 import VerifyEmailPrompt from "../components/VerifyEmailPrompt";
-import { getBalances, getPortfolioHistory, listBots } from "../lib/api";
+import { getBalances, getMarkets, getPortfolioHistory, listBots } from "../lib/api";
 
 export default function HomePage() {
   const { t } = useTranslation();
@@ -35,6 +42,14 @@ export default function HomePage() {
   const [totalUsd, setTotalUsd] = useState(null); // null = still loading
   const [history, setHistory] = useState(null); // null = still loading, [] = loaded but empty
   const [bots, setBots] = useState(null);
+  // Feeds the Hots/Spots tabs inside NewsSection below — same
+  // GET /market/tickers snapshot MarketsPage.jsx polls, already sorted by
+  // the backend most-traded-first (see market.py). Fetched once here
+  // alongside balances/bots rather than on a MarketsPage-style 15s poll
+  // interval: this is a small decorative widget, not the main Markets
+  // screen, so a fresh-on-load snapshot is enough — it doesn't need to
+  // visibly tick while the user is looking at the rest of Home.
+  const [markets, setMarkets] = useState(null);
   // Which RangeTabs pill is selected — one of RANGE_OPTIONS' `value`s
   // below. Lives here (not inside HeroCard) because changing it has to
   // trigger the getPortfolioHistory refetch in the effect right below.
@@ -50,6 +65,14 @@ export default function HomePage() {
       setTotalUsd(res.balances.reduce((sum, b) => sum + Number(b.amount), 0))
     );
     listBots(accessToken).then((res) => setBots(res.bots));
+    // Swallows a failed fetch by just leaving `markets` at null forever
+    // (NewsSection's Hots/Spots tabs then show their loading spinner
+    // indefinitely) rather than throwing — losing this decorative widget's
+    // data shouldn't be treated as fatal to the rest of Home the way a
+    // failed getBalances/listBots would be.
+    getMarkets(accessToken)
+      .then((res) => setMarkets(res.tickers))
+      .catch(() => {});
   }, [accessToken]);
 
   // Separate effect (rather than folded into the one above) so that
@@ -94,11 +117,13 @@ export default function HomePage() {
 
         <QuickActions t={t} />
 
-        <BotsAndAdsSection bots={activeBots} loading={bots === null} t={t} />
+        <AdsCarousel t={t} />
+
+        <ActiveBotsSection bots={activeBots} loading={bots === null} t={t} />
 
         <LeaderboardSection t={t} />
 
-        <NewsSection t={t} />
+        <NewsSection markets={markets} t={t} />
       </div>
     </div>
   );
@@ -108,20 +133,11 @@ function TopRow({ greeting }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "18px", color: "var(--ink-base)" }}>{greeting}</span>
-      <div
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: "var(--radius-full)",
-          background: "var(--cream-deep)",
-          border: "1px solid var(--cream-line)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Icon name="bell" size={17} color="var(--ink-soft)" />
-      </div>
+      {/* Used to be a plain decorative div with a bell glyph and nothing
+          else — NotificationBell.jsx owns the icon, the unread badge, and
+          the dropdown itself now; see that file's module comment for the
+          full design. */}
+      <NotificationBell />
     </div>
   );
 }
@@ -360,116 +376,131 @@ function SectionHeader({ title, action }) {
   );
 }
 
-// Wraps the Active Bots list and the new Ads carousel behind a 2-pill
-// segmented toggle, in place of the section's old plain text title.
-// `view` is local-only UI state (never sent anywhere) — "bots" is the
-// default so the Active Bots list is what a user sees first, matching
-// the previous behaviour before the Ads pill existed. Switch the
-// default by changing the useState initial value below.
-function BotsAndAdsSection({ bots, loading, t }) {
-  const [view, setView] = useState("bots");
-
+function ActiveBotsSection({ bots, loading, t }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SegmentedToggle
-          options={[
-            { value: "bots", label: t("home.activeBots.title") },
-            { value: "ads", label: t("home.adsSection.toggleLabel") },
-          ]}
-          selected={view}
-          onSelect={setView}
-        />
-        {/* "See all" only makes sense for the bots list — the ads
-            carousel has no equivalent destination, so it's hidden
-            rather than left pointing somewhere irrelevant. */}
-        {view === "bots" && (
+      <SectionHeader
+        title={t("home.activeBots.title")}
+        action={
           <Link to="/bots" style={{ fontFamily: "var(--font-body)", fontSize: "12px", color: "var(--teal-base)", textDecoration: "none" }}>
             {t("home.activeBots.seeAll")}
           </Link>
-        )}
-      </div>
+        }
+      />
 
-      {view === "bots" ? (
-        loading ? (
-          <AnimatedPsi mode="working" size={22} color="var(--teal-base)" />
-        ) : bots.length === 0 ? (
-          <EmptyBotsCard t={t} />
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-            {bots.map((bot) => (
-              <BotCard key={bot.id} bot={bot} />
-            ))}
-          </div>
-        )
+      {loading ? (
+        <AnimatedPsi mode="working" size={22} color="var(--teal-base)" />
+      ) : bots.length === 0 ? (
+        <EmptyBotsCard t={t} />
       ) : (
-        <AdsCarousel t={t} />
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+          {bots.map((bot) => (
+            <BotCard key={bot.id} bot={bot} />
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-// Two-pill segmented control — same filled-pill-on-selected look as
-// RangeTabs above, but sized for a section header (12px label vs
-// RangeTabs' 11px) and using the light-surface --cream/--teal tokens
-// instead of RangeTabs' on-dark hero-card tokens, since this sits
-// directly on the page background rather than inside --teal-deep.
-function SegmentedToggle({ options, selected, onSelect }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: "2px",
-        background: "var(--cream-deep)",
-        border: "1px solid var(--cream-line)",
-        borderRadius: "var(--radius-md)",
-        padding: "2px",
-      }}
-    >
-      {options.map((opt) => {
-        const active = opt.value === selected;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onSelect(opt.value)}
-            style={{
-              fontFamily: "var(--font-display)",
-              fontWeight: 700,
-              fontSize: "12.5px",
-              color: active ? "var(--on-accent)" : "var(--ink-soft)",
-              background: active ? "var(--teal-base)" : "none",
-              border: "none",
-              borderRadius: "var(--radius-sm)",
-              padding: "6px 12px",
-              cursor: "pointer",
-            }}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// Sample ad slides for the Ads carousel — fake promo content (no real ad
-// system exists yet), each pairing a real photo with made-up copy from
-// i18n.js's home.adsSection block. Photos are hotlinked from Unsplash's
-// image CDN (images.unsplash.com — Unsplash's license allows this, no
-// API key needed for a plain <img>/background-image request); swap any
-// `image` value here for a different photo's `photo-<id>` URL to change
-// what a slide shows. Add or remove rows here (and a matching
-// slideN key in i18n.js) to change how many slides the carousel has.
-const AD_SLIDES = [
-  { image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&q=80&auto=format&fit=crop", tagKey: "slide1Tag", titleKey: "slide1Title", bodyKey: "slide1Body" },
-  { image: "https://images.unsplash.com/photo-1605792657660-596af9009e82?w=800&q=80&auto=format&fit=crop", tagKey: "slide2Tag", titleKey: "slide2Title", bodyKey: "slide2Body" },
-  { image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&q=80&auto=format&fit=crop", tagKey: "slide3Tag", titleKey: "slide3Title", bodyKey: "slide3Body" },
-  { image: "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=800&q=80&auto=format&fit=crop", tagKey: "slide4Tag", titleKey: "slide4Title", bodyKey: "slide4Body" },
-  { image: "https://images.unsplash.com/photo-1672911640671-65d5dfa97d26?w=800&q=80&auto=format&fit=crop", tagKey: "slide5Tag", titleKey: "slide5Title", bodyKey: "slide5Body" },
+// Full pool the Ads carousel draws from — 30 rows, each pairing a real
+// photo (hotlinked from Unsplash's image CDN — its license allows this,
+// no API key needed for a plain background-image request) with made-up
+// promo copy from the matching adN entry in i18n.js's home.adsSection
+// block. AdsCarousel below only ever shows 5 of these at a time, picked
+// fresh once per calendar day — see pickDailyAds. Add or remove a row
+// here (with its matching adN block in i18n.js) to resize the pool.
+const AD_POOL = [
+  { image: "https://images.unsplash.com/photo-1665597704311-d7304eaf70ac?w=800&q=80&auto=format&fit=crop", tagKey: "ad1Tag", titleKey: "ad1Title", bodyKey: "ad1Body" },
+  { image: "https://images.unsplash.com/photo-1666816943145-bac390ca866c?w=800&q=80&auto=format&fit=crop", tagKey: "ad2Tag", titleKey: "ad2Title", bodyKey: "ad2Body" },
+  { image: "https://images.unsplash.com/photo-1667422380246-3bed910ffae1?w=800&q=80&auto=format&fit=crop", tagKey: "ad3Tag", titleKey: "ad3Title", bodyKey: "ad3Body" },
+  { image: "https://images.unsplash.com/photo-1672911640671-65d5dfa97d26?w=800&q=80&auto=format&fit=crop", tagKey: "ad4Tag", titleKey: "ad4Title", bodyKey: "ad4Body" },
+  { image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&q=80&auto=format&fit=crop", tagKey: "ad5Tag", titleKey: "ad5Title", bodyKey: "ad5Body" },
+  { image: "https://images.unsplash.com/photo-1634704784915-aacf363b021f?w=800&q=80&auto=format&fit=crop", tagKey: "ad6Tag", titleKey: "ad6Title", bodyKey: "ad6Body" },
+  { image: "https://images.unsplash.com/photo-1605792657660-596af9009e82?w=800&q=80&auto=format&fit=crop", tagKey: "ad7Tag", titleKey: "ad7Title", bodyKey: "ad7Body" },
+  { image: "https://images.unsplash.com/photo-1629339942248-45d4b10c8c2f?w=800&q=80&auto=format&fit=crop", tagKey: "ad8Tag", titleKey: "ad8Title", bodyKey: "ad8Body" },
+  { image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&q=80&auto=format&fit=crop", tagKey: "ad9Tag", titleKey: "ad9Title", bodyKey: "ad9Body" },
+  { image: "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=800&q=80&auto=format&fit=crop", tagKey: "ad10Tag", titleKey: "ad10Title", bodyKey: "ad10Body" },
+  { image: "https://images.unsplash.com/photo-1639322537228-f710d846310a?w=800&q=80&auto=format&fit=crop", tagKey: "ad11Tag", titleKey: "ad11Title", bodyKey: "ad11Body" },
+  { image: "https://images.unsplash.com/photo-1644088379091-d574269d422f?w=800&q=80&auto=format&fit=crop", tagKey: "ad12Tag", titleKey: "ad12Title", bodyKey: "ad12Body" },
+  { image: "https://images.unsplash.com/photo-1640161704729-cbe966a08476?w=800&q=80&auto=format&fit=crop", tagKey: "ad13Tag", titleKey: "ad13Title", bodyKey: "ad13Body" },
+  { image: "https://images.unsplash.com/photo-1639322537504-6427a16b0a28?w=800&q=80&auto=format&fit=crop", tagKey: "ad14Tag", titleKey: "ad14Title", bodyKey: "ad14Body" },
+  { image: "https://images.unsplash.com/photo-1623227413711-25ee4388dae3?w=800&q=80&auto=format&fit=crop", tagKey: "ad15Tag", titleKey: "ad15Title", bodyKey: "ad15Body" },
+  { image: "https://images.unsplash.com/photo-1622630998477-20aa696ecb05?w=800&q=80&auto=format&fit=crop", tagKey: "ad16Tag", titleKey: "ad16Title", bodyKey: "ad16Body" },
+  { image: "https://images.unsplash.com/photo-1523961131990-5ea7c61b2107?w=800&q=80&auto=format&fit=crop", tagKey: "ad17Tag", titleKey: "ad17Title", bodyKey: "ad17Body" },
+  { image: "https://images.unsplash.com/photo-1664526937033-fe2c11f1be25?w=800&q=80&auto=format&fit=crop", tagKey: "ad18Tag", titleKey: "ad18Title", bodyKey: "ad18Body" },
+  { image: "https://images.unsplash.com/photo-1694219782948-afcab5c095d3?w=800&q=80&auto=format&fit=crop", tagKey: "ad19Tag", titleKey: "ad19Title", bodyKey: "ad19Body" },
+  { image: "https://images.unsplash.com/photo-1676911809759-77bb68b691c9?w=800&q=80&auto=format&fit=crop", tagKey: "ad20Tag", titleKey: "ad20Title", bodyKey: "ad20Body" },
+  { image: "https://images.unsplash.com/photo-1667984510054-d4562f93621d?w=800&q=80&auto=format&fit=crop", tagKey: "ad21Tag", titleKey: "ad21Title", bodyKey: "ad21Body" },
+  { image: "https://images.unsplash.com/photo-1639825988283-39e5408b75e8?w=800&q=80&auto=format&fit=crop", tagKey: "ad22Tag", titleKey: "ad22Title", bodyKey: "ad22Body" },
+  { image: "https://images.unsplash.com/photo-1639389016105-2fb11199fb6b?w=800&q=80&auto=format&fit=crop", tagKey: "ad23Tag", titleKey: "ad23Title", bodyKey: "ad23Body" },
+  { image: "https://images.unsplash.com/photo-1640592409070-e35e28aedf14?w=800&q=80&auto=format&fit=crop", tagKey: "ad24Tag", titleKey: "ad24Title", bodyKey: "ad24Body" },
+  { image: "https://images.unsplash.com/photo-1646495859894-2717409cd306?w=800&q=80&auto=format&fit=crop", tagKey: "ad25Tag", titleKey: "ad25Title", bodyKey: "ad25Body" },
+  { image: "https://images.unsplash.com/photo-1666816943035-15c29931e975?w=800&q=80&auto=format&fit=crop", tagKey: "ad26Tag", titleKey: "ad26Title", bodyKey: "ad26Body" },
+  { image: "https://images.unsplash.com/photo-1639322537138-5e513100b36e?w=800&q=80&auto=format&fit=crop", tagKey: "ad27Tag", titleKey: "ad27Title", bodyKey: "ad27Body" },
+  { image: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80&auto=format&fit=crop", tagKey: "ad28Tag", titleKey: "ad28Title", bodyKey: "ad28Body" },
+  { image: "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=800&q=80&auto=format&fit=crop", tagKey: "ad29Tag", titleKey: "ad29Title", bodyKey: "ad29Body" },
+  { image: "https://images.unsplash.com/photo-1676911809746-85d90edbbe4a?w=800&q=80&auto=format&fit=crop", tagKey: "ad30Tag", titleKey: "ad30Title", bodyKey: "ad30Body" },
 ];
 
-// Bybit-style sliding ad banner carousel. Built on native CSS scroll-snap
+// How many of AD_POOL's 30 rows actually show up in a given day's
+// carousel. Change this to show more or fewer slides per day.
+const ADS_PER_DAY = 5;
+
+// A tiny seedable PRNG (mulberry32) — plain Math.random() can't be given
+// a seed, so there'd be no way to make "today's" 5 slides come out the
+// same on every page load/refresh but different again tomorrow. Feeding
+// it the same seed always reproduces the same sequence of "random"
+// numbers, which is exactly the property a deterministic daily pick
+// needs.
+function mulberry32(seed) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Turns today's date into a 32-bit integer seed for mulberry32 above.
+// Plain string→number hashing (multiply-and-add per character, forced
+// back into 32-bit range with `| 0` each step) — nothing fancy needed
+// here, it just has to turn "2026-08-31" into a number deterministically.
+function hashStringToSeed(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
+// Picks ADS_PER_DAY rows out of AD_POOL, reseeded by the device's local
+// calendar date so every visit on the same day gets the same slides in
+// the same order, and the set changes again the next day. (Using local
+// date components rather than an ISO/UTC date specifically so "today"
+// matches what the viewer's own clock says, not UTC's.) A Fisher-Yates
+// shuffle driven by the seeded RNG, keeping only the first ADS_PER_DAY
+// entries, is a standard unbiased way to pick a random subset without
+// repeats. NOTE: if the app is left open across midnight, this won't
+// re-pick mid-session — it's only recomputed on mount (see the useMemo
+// in AdsCarousel below) — which is fine for a decorative banner.
+function pickDailyAds() {
+  const now = new Date();
+  const dateKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+  const random = mulberry32(hashStringToSeed(dateKey));
+
+  const shuffled = [...AD_POOL];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, ADS_PER_DAY);
+}
+
+// Untitled Bybit-style sliding ad banner carousel, sitting directly above
+// Active Bots with no section header of its own. Built on native CSS
+// scroll-snap
 // rather than a JS drag library: the slide track is a horizontally
 // scrollable flex row with scroll-snap-type: x mandatory and each slide
 // set to scroll-snap-align: start, which gives free touch/trackpad swipe
@@ -480,6 +511,11 @@ const AD_SLIDES = [
 // scrolling settles so the dots stay in sync either way.
 function AdsCarousel({ t }) {
   const AUTOPLAY_MS = 4000; // change this to speed up/slow down autoplay
+  // Computed once per mount (empty dependency array) rather than on every
+  // render — pickDailyAds does a bit of shuffling work that only needs
+  // to happen once, and re-running it on every render would risk
+  // reshuffling mid-session if any of its inputs ever became reactive.
+  const slides = useMemo(() => pickDailyAds(), []);
   const trackRef = useRef(null);
   const [index, setIndex] = useState(0);
   // Guards against the onScroll handler fighting a code-driven scroll
@@ -515,10 +551,10 @@ function AdsCarousel({ t }) {
   // than jumping immediately.
   useEffect(() => {
     const id = setInterval(() => {
-      scrollToIndex((index + 1) % AD_SLIDES.length);
+      scrollToIndex((index + 1) % slides.length);
     }, AUTOPLAY_MS);
     return () => clearInterval(id);
-  }, [index]);
+  }, [index, slides.length]);
 
   // Keeps the dots in sync when the viewer swipes/scrolls the track
   // manually instead of using autoplay or the dots. Debounced on
@@ -532,7 +568,7 @@ function AdsCarousel({ t }) {
       const track = trackRef.current;
       if (!track) return;
       const nearest = Math.round(track.scrollLeft / track.clientWidth);
-      setIndex(Math.max(0, Math.min(AD_SLIDES.length - 1, nearest)));
+      setIndex(Math.max(0, Math.min(slides.length - 1, nearest)));
     }, 150);
   };
 
@@ -554,13 +590,13 @@ function AdsCarousel({ t }) {
           WebkitOverflowScrolling: "touch",
         }}
       >
-        {AD_SLIDES.map((slide, i) => (
+        {slides.map((slide, i) => (
           <AdSlide key={i} slide={slide} t={t} />
         ))}
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", gap: "var(--space-3)" }}>
-        {AD_SLIDES.map((_, i) => (
+        {slides.map((_, i) => (
           <button
             key={i}
             type="button"
@@ -752,38 +788,167 @@ function LeaderboardSection({ t }) {
   );
 }
 
-// Sample content only — no news source exists yet. Same PREVIEW-tag
-// treatment as LeaderboardSection above.
-function NewsSection({ t }) {
+// How many coins show up in the Hots / Spots tabs below — a small,
+// decorative-widget-sized slice of the full markets feed (which has 300+
+// rows on MarketsPage), matching Bybit's home-screen markets widget rather
+// than the full Markets tab's scrollable list. Raise this for a longer
+// widget, lower it for a more compact one.
+const MARKET_FEED_ROWS = 5;
+
+// The News/Hots/Spots widget just under Leaderboard. Bybit's home screen
+// has this same three-tab shape: tapping a tab swaps the list below it
+// rather than showing three separate stacked sections. News still has no
+// real data source (no news feed exists yet), so it alone keeps the
+// PREVIEW tag and its old sample content; Hots and Spots are both real,
+// live slices of the same GET /market/tickers snapshot MarketsPage.jsx
+// uses (passed down as `markets` from HomePage's own fetch) — Hots is
+// simply the top MARKET_FEED_ROWS of that array (the backend already
+// returns it sorted by 24h USDT volume, most-traded first — see
+// market.py), Spots is the same data re-sorted client-side by 24h %
+// change to surface the biggest movers instead.
+function NewsSection({ markets, t }) {
+  const [feedTab, setFeedTab] = useState("news"); // one of "news" | "hots" | "spots"
+
   const sampleItems = [
     { tag: "MARKET", title: "BTC holds above key support after weekend volatility", meta: "2h ago" },
     { tag: "PRODUCT", title: "Grid bots now support tighter range configurations", meta: "1d ago" },
     { tag: "MARKET", title: "ETH network activity climbs into the new week", meta: "2d ago" },
   ];
+
+  // Hots: no re-sort needed, `markets` already arrives most-traded-first.
+  // Spots: a fresh sorted copy (spread before .sort — .sort mutates in
+  // place, and mutating the `markets` array HomePage passed down would
+  // silently reorder it for the Hots tab too on the next render).
+  const hotsList = (markets || []).slice(0, MARKET_FEED_ROWS);
+  const spotsList = [...(markets || [])]
+    .sort((a, b) => Number(b.change_percent) - Number(a.change_percent))
+    .slice(0, MARKET_FEED_ROWS);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-      <SectionHeader title={t("home.news.title")} action={<PreviewTag t={t} />} />
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        {sampleItems.map((item, i) => (
-          <div
-            key={i}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <FeedTabs selected={feedTab} onSelect={setFeedTab} t={t} />
+        {feedTab === "news" && <PreviewTag t={t} />}
+      </div>
+
+      {feedTab === "news" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+          {sampleItems.map((item, i) => (
+            <div
+              key={i}
+              style={{
+                background: "var(--cream-deep)",
+                border: "1px solid var(--cream-line)",
+                borderRadius: "var(--radius-lg)",
+                padding: "12px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-3)",
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-data)", fontSize: "9px", letterSpacing: "0.05em", color: "var(--teal-base)" }}>
+                {item.tag}
+              </span>
+              <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "12.5px", color: "var(--ink-base)" }}>{item.title}</span>
+              <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>{item.meta}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(feedTab === "hots" || feedTab === "spots") && (
+        markets === null ? (
+          <AnimatedPsi mode="working" size={22} color="var(--teal-base)" />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+            {(feedTab === "hots" ? hotsList : spotsList).map((ticker) => (
+              <MarketFeedRow key={ticker.symbol} ticker={ticker} />
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+// The News/Hots/Spots tab row itself — same filled-pill-on-selection
+// treatment as RangeTabs under the hero chart, but sized and colored for
+// sitting on the plain cream page background (not the dark hero card), so
+// it reuses SectionHeader's title styling for the text itself rather than
+// RangeTabs' --on-accent/--teal-sage dark-card tokens.
+function FeedTabs({ selected, onSelect, t }) {
+  const tabs = [
+    { value: "news", label: t("home.news.title") },
+    { value: "hots", label: t("home.news.hotsTab") },
+    { value: "spots", label: t("home.news.spotsTab") },
+  ];
+  return (
+    <div style={{ display: "flex", gap: "var(--space-8)" }}>
+      {tabs.map((tab) => {
+        const active = tab.value === selected;
+        return (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => onSelect(tab.value)}
             style={{
-              background: "var(--cream-deep)",
-              border: "1px solid var(--cream-line)",
-              borderRadius: "var(--radius-lg)",
-              padding: "12px 14px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--space-3)",
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: "14px",
+              color: active ? "var(--ink-base)" : "var(--ink-soft)",
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
             }}
           >
-            <span style={{ fontFamily: "var(--font-data)", fontSize: "9px", letterSpacing: "0.05em", color: "var(--teal-base)" }}>
-              {item.tag}
-            </span>
-            <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "12.5px", color: "var(--ink-base)" }}>{item.title}</span>
-            <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>{item.meta}</span>
-          </div>
-        ))}
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// One row inside the Hots/Spots widget — a compact version of MarketsPage's
+// CoinRow (same CoinLogo + price + %-change shape) sized to sit comfortably
+// inside this widget's list alongside the News tab's cards, rather than the
+// slightly larger row MarketsPage uses for its own full-height list.
+function MarketFeedRow({ ticker }) {
+  const changePercent = Number(ticker.change_percent);
+  const price = Number(ticker.price);
+  // Same reasoning as MarketsPage's CoinRow: coins under $1 need more than
+  // 2 decimals or they'd all round to "$0.00". Change the `1` threshold or
+  // the `6` decimal count here for different precision.
+  const priceDecimals = price >= 1 ? 2 : 6;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "10px 14px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+        <CoinLogo base={ticker.base} size={30} />
+        <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "13px", color: "var(--ink-base)" }}>
+          {ticker.base}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+        <span style={{ fontFamily: "var(--font-data)", fontSize: "13px", color: "var(--ink-base)" }}>
+          ${price.toLocaleString(undefined, { minimumFractionDigits: priceDecimals, maximumFractionDigits: priceDecimals })}
+        </span>
+        <DeltaChip tone={changePercent >= 0 ? "up" : "down"} fontSize="11px">
+          {changePercent >= 0 ? "+" : ""}
+          {changePercent.toFixed(2)}%
+        </DeltaChip>
       </div>
     </div>
   );

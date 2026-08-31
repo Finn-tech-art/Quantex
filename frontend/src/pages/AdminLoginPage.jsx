@@ -25,7 +25,7 @@ export default function AdminLoginPage() {
     setSubmitting(true);
     try {
       await login(email, password);
-      navigate("/admin/win-rate");
+      navigate("/admin/overview");
     } catch (err) {
       setError(err.message);
     } finally {

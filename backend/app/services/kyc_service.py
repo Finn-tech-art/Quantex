@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.config import settings
+from app.services import notification_service
 from app.services.supabase_client import get_supabase
 
 # 5MB / JPEG-PNG-PDF-only — the exact limits the architecture doc specifies
@@ -277,6 +278,27 @@ def _decide(submission_id: str, admin_id: str, new_status_code: str, rejection_r
         .eq("current_kyc_submission_id", submission_id)
         .execute()
     )
+
+    # Notify the bell — see notification_service.py's module docstring for
+    # why this call can never raise or block the decision above, which has
+    # already been committed to the database by this point regardless of
+    # whether this notification succeeds. new_status_code is always exactly
+    # "APPROVED" or "REJECTED" here (see approve_submission/reject_submission
+    # below, the only two callers of this private function), so an if/else
+    # is enough — no need for a lookup table of message text per status.
+    if new_status_code == "APPROVED":
+        notification_service.create_notification(
+            user_id, "KYC_APPROVED",
+            "Identity verified",
+            "Your KYC verification was approved — you can now withdraw funds.",
+        )
+    else:
+        notification_service.create_notification(
+            user_id, "KYC_REJECTED",
+            "Verification rejected",
+            f"Your KYC submission was rejected: {rejection_reason}",
+        )
+
     return True
 
 

@@ -8,9 +8,11 @@ import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 const LINKS = [
+  { to: "/admin/overview", labelKey: "admin.nav.overview" },
   { to: "/admin/win-rate", labelKey: "admin.nav.winRate" },
   { to: "/admin/kyc", labelKey: "admin.nav.kyc" },
   { to: "/admin/withdrawals", labelKey: "admin.nav.withdrawals" },
+  { to: "/admin/withdrawal-fee", labelKey: "admin.nav.withdrawalFee" },
   { to: "/admin/consolidation-addresses", labelKey: "admin.nav.consolidation" },
   { to: "/admin/sweeps", labelKey: "admin.nav.sweeps" },
 ];

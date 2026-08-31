@@ -74,6 +74,16 @@ class WithdrawalListResponse(BaseModel):
     withdrawals: list[WithdrawalResponse]
 
 
+class WithdrawalFeePreviewResponse(BaseModel):
+    # Backs GET /withdrawals/fee — lets WithdrawPage.jsx show an accurate
+    # "you'll receive" preview before the user submits, without hardcoding a
+    # copy of whatever an admin last set via PUT /admin/withdrawal-fee (see
+    # withdrawal_fee_service.py). The actual fee charged is still whatever
+    # create_request() reads at the moment a request is made — this is a
+    # read-only preview of that same current value, nothing more.
+    fee_amount: str
+
+
 # ── Admin-facing ─────────────────────────────────────────────────────────────
 class AdminWithdrawalSummary(BaseModel):
     id: str

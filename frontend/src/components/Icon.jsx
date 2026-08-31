@@ -343,6 +343,21 @@ const ICONS = {
     ),
   },
 
+  // Two overlapping rounded rects — the standard "copy to clipboard" glyph.
+  // Used by DepositPage.jsx's address-copy button; swapped out for
+  // checkCircle (above) for a moment right after a successful copy, so the
+  // feedback sits at the exact spot the user just tapped, not only in a
+  // separate toast. Only an outline variant exists; nothing renders this
+  // filled.
+  copy: {
+    outline: (color) => (
+      <>
+        <rect x="8.5" y="8.5" width="10" height="10" rx="1.6" stroke={color} strokeWidth="1.6" fill="none" />
+        <path d="M15.5 8.5V6.6a1.6 1.6 0 0 0-1.6-1.6H6.6A1.6 1.6 0 0 0 5 6.6v7.3a1.6 1.6 0 0 0 1.6 1.6h1.9" stroke={color} strokeWidth="1.6" fill="none" />
+      </>
+    ),
+  },
+
   // Plain X — used as the "clear this input" glyph inside MarketsPage.jsx's
   // search box once it has text typed into it. Only an outline variant
   // exists; nothing renders this filled.
@@ -366,8 +381,13 @@ const ICONS = {
  *   standard 0 0 24 24 — see Section 7 of the design spec).
  * color: any CSS color, defaults to currentColor so the icon inherits
  *   whatever text color its parent has, exactly like AnimatedPsi.jsx.
+ * className: optional, passed straight through to the rendered <svg> —
+ *   e.g. TabBar.jsx uses this to attach the "qx-tab-pop" bounce animation
+ *   class (see index.css) to whichever tab icon just became active.
+ *   Omitted entirely by every other call site, which behave exactly as
+ *   before.
  */
-export default function Icon({ name, size = 22, variant = "outline", color = "currentColor" }) {
+export default function Icon({ name, size = 22, variant = "outline", color = "currentColor", className }) {
   const entry = ICONS[name];
   if (!entry) {
     // Fails loud in dev rather than silently rendering nothing — a typo'd
@@ -378,7 +398,7 @@ export default function Icon({ name, size = 22, variant = "outline", color = "cu
   }
   const render = variant === "filled" && entry.filled ? entry.filled : entry.outline;
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" className={className}>
       {render(color)}
     </svg>
   );

@@ -42,6 +42,48 @@ class WinRateResponse(BaseModel):
     is_default: bool
 
 
+# ── Dashboard overview ───────────────────────────────────────────────────────
+class AdminDailyStatsEntry(BaseModel):
+    date: str  # "YYYY-MM-DD", UTC calendar day
+    signups: int
+    deposits_count: int
+    # Decimal STRING, USD-notional (every deposit asset summed 1:1 — see
+    # admin_overview_service.py's module comment on the stablecoin
+    # assumption behind that).
+    deposits_amount: str
+
+
+class AdminOverviewResponse(BaseModel):
+    signups_today: int
+    deposits_today_count: int
+    deposits_today_amount: str
+    # Oldest first, one entry per UTC calendar day from the very first
+    # signup/deposit ever recorded through today — see
+    # admin_overview_service.get_overview's docstring. Backs both the
+    # calendar heatmap and the line/bar charts on AdminOverviewPage.jsx.
+    daily: list[AdminDailyStatsEntry]
+
+
+# ── Withdrawal fee setting ───────────────────────────────────────────────────
+class WithdrawalFeeResponse(BaseModel):
+    # Decimal STRING, not a float — same convention as every other
+    # money-bearing value that crosses this API (see
+    # WithdrawalRequestBody.amount in models/withdrawal.py for the full
+    # reasoning: floats round-trip through JSON with binary rounding error,
+    # never acceptable for a value that's either headed into, or came out
+    # of, a NUMERIC column).
+    fee_amount: str
+    # True when no admin has set a fee yet and this is
+    # withdrawal_fee_service.DEFAULT_WITHDRAWAL_FEE rather than something an
+    # admin actually chose — same meaning as WinRateResponse.is_default above.
+    is_default: bool
+    updated_at: str | None = None
+
+
+class SetWithdrawalFeeRequest(BaseModel):
+    fee_amount: str
+
+
 # ── Deposit consolidation address settings (module 1) ───────────────────────
 class ConsolidationAddressEntry(BaseModel):
     network: str

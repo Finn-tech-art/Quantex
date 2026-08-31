@@ -9,16 +9,25 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.withdrawal import (
     WithdrawalConfirmBody,
+    WithdrawalFeePreviewResponse,
     WithdrawalListResponse,
     WithdrawalRequestBody,
     WithdrawalRequestResponse,
     WithdrawalResponse,
 )
-from app.services import withdrawal_service
+from app.services import withdrawal_fee_service, withdrawal_service
 from app.services.otp_service import OtpCooldownError
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/withdrawals", tags=["withdrawals"])
+
+
+@router.get("/fee", response_model=WithdrawalFeePreviewResponse)
+def get_withdrawal_fee(user: dict = Depends(get_current_user)):
+    # Lets WithdrawPage.jsx preview an accurate fee before submitting,
+    # instead of hardcoding a copy of whatever an admin last set — see
+    # WithdrawalFeePreviewResponse's docstring in models/withdrawal.py.
+    return WithdrawalFeePreviewResponse(fee_amount=str(withdrawal_fee_service.get_current_fee()["fee_amount"]))
 
 
 @router.post("/request", response_model=WithdrawalRequestResponse)

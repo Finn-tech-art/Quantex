@@ -317,6 +317,43 @@ export function getMyWithdrawals(accessToken) {
   });
 }
 
+// Read-only preview of the current admin-set withdrawal fee — see
+// WithdrawPage.jsx, which calls this instead of hardcoding a fee value so
+// its pre-submit "you'll receive" estimate never drifts from whatever an
+// admin last set via setWithdrawalFee below.
+export function getWithdrawalFeePreview(accessToken) {
+  return request("/withdrawals/fee", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+// ── Notifications (the bell icon) — see backend/app/services/
+// notification_service.py's module docstring for the full list of events
+// that write a row here (KYC decisions, withdrawal decisions, deposit
+// confirmations, bot start/stop) and NotificationBell.jsx for how these
+// three calls get used (a poll timer for getNotifications, a tap on an
+// unread row for markNotificationRead, the dropdown's header button for
+// markAllNotificationsRead). ────────────────────────────────────────────────
+export function getNotifications(accessToken) {
+  return request("/notifications", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function markNotificationRead(accessToken, notificationId) {
+  return request(`/notifications/${notificationId}/read`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function markAllNotificationsRead(accessToken) {
+  return request("/notifications/read-all", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
 // ── Admin (separate credential from the regular user access token above —
 // see backend/app/services/admin_auth_service.py's module comment for why
 // admins aren't Supabase Auth users and need their own login/token). Every
@@ -350,6 +387,30 @@ export function setWinRate(adminToken, { winDate, winRate, targetMinReturn }) {
       win_rate: winRate,
       target_min_return: targetMinReturn,
     }),
+  });
+}
+
+// ── Withdrawal fee setting ───────────────────────────────────────────────────
+export function getWithdrawalFee(adminToken) {
+  return request("/admin/withdrawal-fee", {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+}
+
+export function setWithdrawalFee(adminToken, feeAmount) {
+  // feeAmount stays a decimal STRING all the way to the backend, same
+  // reasoning as every other money-bearing value passed through this file.
+  return request("/admin/withdrawal-fee", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ fee_amount: feeAmount }),
+  });
+}
+
+// ── Dashboard overview ───────────────────────────────────────────────────────
+export function getAdminOverview(adminToken) {
+  return request("/admin/overview", {
+    headers: { Authorization: `Bearer ${adminToken}` },
   });
 }
 

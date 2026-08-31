@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
+import Icon from "../components/Icon";
 import { expectDeposit, getBalances, getDepositAddress, WS_BASE } from "../lib/api";
 
 const NETWORKS = ["TRC20", "BASE", "POLYGON"];
@@ -233,6 +234,9 @@ function AddressCard({ address, qrDataUrl, loading, copied, onCopy, t }) {
         onClick={onCopy}
         disabled={loading}
         style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-4)",
           background: "var(--teal-base)",
           color: "var(--on-accent)",
           border: "none",
@@ -244,6 +248,11 @@ function AddressCard({ address, qrDataUrl, loading, copied, onCopy, t }) {
           cursor: loading ? "default" : "pointer",
         }}
       >
+        {/* Swaps to a checkmark for the same ~1.5s window `copied` is true
+            (see copyAddress()'s own setTimeout in the parent component) —
+            right at the spot the user just tapped, rather than making them
+            look elsewhere on screen (e.g. a toast) to confirm it worked. */}
+        <Icon name={copied ? "checkCircle" : "copy"} size={14} color="var(--on-accent)" />
         {copied ? t("deposit.copied") : t("deposit.copy")}
       </button>
     </div>

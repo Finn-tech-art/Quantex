@@ -191,16 +191,34 @@ const resources = {
       },
       admin: {
         nav: {
+          overview: 'Overview',
           winRate: 'Win rate',
           kyc: 'KYC queue',
           withdrawals: 'Withdrawals',
+          withdrawalFee: 'Withdrawal fee',
           consolidation: 'Consolidation addresses',
           sweeps: 'Sweeps',
         },
         login: {
           title: 'Admin',
-          subtitle: 'Sign in to manage the daily win rate.',
+          subtitle: 'Sign in to the admin dashboard.',
           submit: 'Log in',
+        },
+        overview: {
+          title: 'Overview',
+          logout: 'Log out',
+          statSignupsToday: 'Signups today',
+          statDepositsCountToday: 'Deposits today',
+          statDepositsAmountToday: 'Deposited today',
+          calendarTitle: 'Activity, all time',
+          calendarLess: 'Less',
+          calendarMore: 'More',
+          signupsChartTitle: 'Signups per day',
+          depositsChartTitle: 'Deposits per day (USD)',
+          noData: 'No activity recorded yet.',
+          tooltipSignups: '{{count}} signup(s)',
+          tooltipDeposits: '{{count}} deposit(s) · {{amount}}',
+          tooltipSignupsOnly: '{{count}} signup(s)',
         },
         winRate: {
           title: 'Daily win rate',
@@ -215,6 +233,19 @@ const resources = {
           submit: 'Save for today',
           saving: 'Saving…',
           saved: 'Saved — this is now live for every simulated bot session today.',
+        },
+        withdrawalFee: {
+          title: 'Withdrawal fee',
+          logout: 'Log out',
+          currentLabel: 'Current fee',
+          perWithdrawal: 'per withdrawal',
+          defaultBadge: 'DEFAULT — not set by an admin yet',
+          setBadge: 'SET BY ADMIN',
+          feeLabel: 'Fee amount',
+          feeHint: 'Charged in the same asset being withdrawn (e.g. 2 means a 2 USDT fee on a USDT withdrawal). Only applies to withdrawals requested after you save.',
+          submit: 'Save',
+          saving: 'Saving…',
+          saved: 'Saved — this now applies to every new withdrawal request.',
         },
         kyc: {
           title: 'KYC queue',
@@ -296,6 +327,17 @@ const resources = {
           copied: 'Copied',
         },
       },
+      // Chrome text for the notification bell dropdown (NotificationBell.jsx).
+      // Each individual notification's own title/body text is NOT looked up
+      // here — it comes pre-formatted straight from the backend (see
+      // notification_service.py's module docstring for why), so this block
+      // only covers the dropdown shell itself: its header, the "mark all
+      // read" action, and the empty state.
+      notifications: {
+        title: 'Notifications',
+        markAllRead: 'Mark all read',
+        empty: 'No notifications yet.',
+      },
       nav: {
         home: 'Home',
         markets: 'Markets',
@@ -324,27 +366,106 @@ const resources = {
           empty: 'No active bots yet.',
           cta: 'Create your first bot',
         },
-        // The "Ads" pill next to Active bots — a fake promo carousel
-        // (Bybit-banner style) with no real ad system behind it yet. Each
-        // slide below is sample copy only; see AdsCarousel in HomePage.jsx
-        // for the paired background photo per slide.
+        // Untitled promo carousel above Active bots — a fake ad system (no
+        // real ad backend exists yet). This is the full 30-ad pool; each
+        // day AdsCarousel in HomePage.jsx deterministically picks 5 of
+        // these 30 to actually display (see pickDailyAds there), so this
+        // whole block is bigger than what any one visit shows. Each adN
+        // pairs with the adN entry (by array position) in AD_POOL in
+        // HomePage.jsx, which supplies the background photo — add or
+        // remove an adN block here together with its AD_POOL row to
+        // resize the pool below 30.
         adsSection: {
-          toggleLabel: 'Ads',
-          slide1Tag: 'NEW',
-          slide1Title: 'Grid bots just got sharper',
-          slide1Body: 'Tighter range configs, same set-and-forget simplicity.',
-          slide2Tag: 'REFERRAL',
-          slide2Title: 'Bring a friend, both get boosted',
-          slide2Body: 'Share your code — you both unlock a starting bonus.',
-          slide3Tag: 'LAUNCH WEEK',
-          slide3Title: 'Zero fees on your first 7 days',
-          slide3Body: 'Every trade this week trades commission-free.',
-          slide4Tag: 'SECURITY',
-          slide4Title: 'Your keys, your crypto',
-          slide4Body: 'Withdraw-only permissions are never granted to the bot engine.',
-          slide5Tag: 'GET STARTED',
-          slide5Title: 'New to Web3? Start in minutes',
-          slide5Body: 'Deposit, deploy a bot, and watch it trade — no experience needed.',
+          ad1Tag: 'NEW',
+          ad1Title: 'Grid bots just got sharper',
+          ad1Body: 'Tighter range configs, same set-and-forget simplicity.',
+          ad2Tag: 'REFERRAL',
+          ad2Title: 'Bring a friend, both get boosted',
+          ad2Body: 'Share your code — you both unlock a starting bonus.',
+          ad3Tag: 'LAUNCH WEEK',
+          ad3Title: 'Zero fees on your first 7 days',
+          ad3Body: 'Every trade this week trades commission-free.',
+          ad4Tag: 'SECURITY',
+          ad4Title: 'Your keys, your crypto',
+          ad4Body: 'Withdraw-only permissions are never granted to the bot engine.',
+          ad5Tag: 'GET STARTED',
+          ad5Title: 'New to Web3? Start in minutes',
+          ad5Body: 'Deposit, deploy a bot, and watch it trade — no experience needed.',
+          ad6Tag: 'DCA',
+          ad6Title: 'Dollar-cost average on autopilot',
+          ad6Body: 'Set an interval once, let the bot buy the dips for you.',
+          ad7Tag: 'MOMENTUM',
+          ad7Title: 'Ride the trend, not your emotions',
+          ad7Body: 'Momentum bots enter and exit on signal, not on gut feeling.',
+          ad8Tag: 'EDUCATION',
+          ad8Title: 'What is a grid bot, really?',
+          ad8Body: 'Buy low, sell high, on repeat — automatically, 24/7.',
+          ad9Tag: 'UPTIME',
+          ad9Title: 'Your bots never sleep',
+          ad9Body: 'Markets move at 3am too — so do your strategies.',
+          ad10Tag: 'TRANSPARENCY',
+          ad10Title: 'Every fill, logged in real time',
+          ad10Body: 'Check your fill feed any time — nothing happens off the record.',
+          ad11Tag: 'MULTI-CHAIN',
+          ad11Title: 'Deposit from more chains',
+          ad11Body: 'TRC-20, Base, and Polygon deposits all land in one balance.',
+          ad12Tag: 'SPEED',
+          ad12Title: 'From deposit to trading in minutes',
+          ad12Body: 'No lengthy onboarding — fund your account and go.',
+          ad13Tag: 'CONTROL',
+          ad13Title: 'Pause anytime, no penalty',
+          ad13Body: 'Step away from a bot without losing your place.',
+          ad14Tag: 'MILESTONE',
+          ad14Title: 'Thousands of grid cycles completed',
+          ad14Body: 'Small, repeatable wins add up over time.',
+          ad15Tag: 'SIMPLICITY',
+          ad15Title: 'One dashboard, every bot',
+          ad15Body: 'Track allocation, P&L, and fills without leaving Home.',
+          ad16Tag: 'RISK',
+          ad16Title: 'Set your range, know your risk',
+          ad16Body: 'Grid bots only trade inside the bounds you define.',
+          ad17Tag: 'COMMUNITY',
+          ad17Title: 'See how other traders are doing',
+          ad17Body: 'Check the leaderboard for a look at top-performing strategies.',
+          ad18Tag: 'NIGHT MODE',
+          ad18Title: 'Built for however you trade',
+          ad18Body: 'Switch to dark mode from the menu, any time.',
+          ad19Tag: 'PRECISION',
+          ad19Title: "Rebalance without the busywork",
+          ad19Body: "Let a bot handle the buy-sell cycle so you don't have to.",
+          ad20Tag: 'FIRST BOT',
+          ad20Title: 'Your first bot takes under a minute',
+          ad20Body: 'Pick a pair, set an allocation, and launch.',
+          ad21Tag: 'CLARITY',
+          ad21Title: 'No hidden spread markups',
+          ad21Body: 'The fee shown at trade time is the fee you pay.',
+          ad22Tag: 'WITHDRAWALS',
+          ad22Title: 'Verify once, withdraw whenever',
+          ad22Body: 'KYC is a one-time step — after that, withdrawals are yours to make.',
+          ad23Tag: 'ALLOCATION',
+          ad23Title: 'Split funds across strategies',
+          ad23Body: 'Run a grid and a DCA bot side by side on different pairs.',
+          ad24Tag: 'DATA',
+          ad24Title: 'Charts built right into every bot',
+          ad24Body: "Watch price action and your bot's activity on the same view.",
+          ad25Tag: 'STABILITY',
+          ad25Title: 'Designed to run unattended',
+          ad25Body: 'Set your parameters once and let the strategy do its job.',
+          ad26Tag: 'ONBOARDING',
+          ad26Title: 'Your balance, one tap away',
+          ad26Body: 'Total assets and 7-day performance, right on Home.',
+          ad27Tag: 'FLEXIBILITY',
+          ad27Title: 'Change your mind anytime',
+          ad27Body: 'Stop a bot and start a different strategy whenever you like.',
+          ad28Tag: 'INSIGHT',
+          ad28Title: 'Know your realized vs. unrealized P&L',
+          ad28Body: 'Every bot breaks its performance down for you automatically.',
+          ad29Tag: 'MARKETS',
+          ad29Title: 'New pairs added regularly',
+          ad29Body: 'Check Markets for the latest coins available to trade.',
+          ad30Tag: 'WELCOME',
+          ad30Title: "Glad you're here",
+          ad30Body: 'Thanks for building and trading on Quantex.',
         },
         // Leaderboard + News have no real backend data source yet (no
         // trader-ranking system, no news source) — per the design
@@ -361,6 +482,12 @@ const resources = {
         news: {
           title: 'News',
           preview: 'PREVIEW',
+          // Tab labels for the Hots/Spots widget beside News — see
+          // NewsSection/FeedTabs in HomePage.jsx. Both are fed by real
+          // getMarkets() data (unlike News' sample items), so change these
+          // two strings only — no other tab-related copy lives elsewhere.
+          hotsTab: 'Hots',
+          spotsTab: 'Spots',
         },
         verifyEmail: {
           body: 'Verify your email to unlock deposits.',

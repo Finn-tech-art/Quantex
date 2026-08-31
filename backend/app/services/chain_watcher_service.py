@@ -7,6 +7,7 @@ from tronpy.keys import to_base58check_address
 from tronpy.providers import HTTPProvider
 
 from app.config import settings
+from app.services import notification_service
 from app.services.network_assets import NETWORK_CONFIG
 from app.services.supabase_client import get_supabase
 
@@ -99,6 +100,16 @@ def _credit_deposit(user_id: str, asset_code: str, network_code: str, amount: De
 
     logger.info("Credited deposit: user=%s network=%s asset=%s amount=%s tx=%s",
                 user_id, network_code, asset_code, amount, tx_hash)
+
+    # Notify the bell — see notification_service.py's module docstring for
+    # why this call can never raise or block anything above; the ledger
+    # entry has already landed for real by this point regardless of
+    # whether this notification succeeds.
+    notification_service.create_notification(
+        user_id, "DEPOSIT_CONFIRMED",
+        "Deposit received",
+        f"{amount} {asset_code} was credited to your balance.",
+    )
 
     # If a live session is watching this deposit (2.2b), resolve it instantly
     # instead of leaving it to time out its polling window. Harmless no-op if

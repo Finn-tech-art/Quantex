@@ -22,7 +22,9 @@ import CreateBotPage from "./pages/CreateBotPage";
 import FakeSessionPage from "./pages/FakeSessionPage";
 import KycPage from "./pages/KycPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminOverviewPage from "./pages/AdminOverviewPage";
 import AdminWinRatePage from "./pages/AdminWinRatePage";
+import AdminWithdrawalFeePage from "./pages/AdminWithdrawalFeePage";
 import AdminKycQueuePage from "./pages/AdminKycQueuePage";
 import AdminWithdrawalsQueuePage from "./pages/AdminWithdrawalsQueuePage";
 import AdminConsolidationAddressesPage from "./pages/AdminConsolidationAddressesPage";
@@ -116,10 +118,26 @@ function App() {
                 everything else under /admin requires an admin session. */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
             <Route
+              path="/admin/overview"
+              element={
+                <AdminProtectedRoute>
+                  <AdminOverviewPage />
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/win-rate"
               element={
                 <AdminProtectedRoute>
                   <AdminWinRatePage />
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/withdrawal-fee"
+              element={
+                <AdminProtectedRoute>
+                  <AdminWithdrawalFeePage />
                 </AdminProtectedRoute>
               }
             />

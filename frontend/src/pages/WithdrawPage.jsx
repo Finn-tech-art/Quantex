@@ -20,7 +20,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import { Field, ErrorText, PrimaryButton } from "../components/FormControls";
-import { confirmWithdrawal, getBalances, getMyWithdrawals, requestWithdrawal } from "../lib/api";
+import { confirmWithdrawal, getBalances, getMyWithdrawals, getWithdrawalFeePreview, requestWithdrawal } from "../lib/api";
 
 // Which network(s) each asset can be withdrawn over — kept in sync BY HAND
 // with withdrawal_service.ASSET_NETWORKS on the backend (itself derived
@@ -34,15 +34,17 @@ const ASSET_NETWORKS = {
   USDC: ["BASE", "POLYGON"],
 };
 
-// Mirrors withdrawal_service.py's MIN_WITHDRAWAL_AMOUNT / WITHDRAWAL_FLAT_FEE
-// / BALANCE_FLOOR_AFTER_WITHDRAWAL — shown here purely so the form can
-// preview "you'll receive X" and the minimum/floor notice before the
-// network round trip. The backend re-validates every one of these for
-// real; if any of these three ever change on the backend, update the
-// matching value here too or this preview will just be wrong (harmless —
-// the backend's own error message would still catch it — but confusing).
+// Mirrors withdrawal_service.py's MIN_WITHDRAWAL_AMOUNT /
+// BALANCE_FLOOR_AFTER_WITHDRAWAL — shown here purely so the form can preview
+// the minimum/floor notice before the network round trip. The backend
+// re-validates both for real; if either ever changes on the backend, update
+// the matching value here too or this preview will just be wrong (harmless
+// — the backend's own error message would still catch it — but confusing).
+// The withdrawal FEE used to be a third hardcoded constant here too, but
+// it's admin-configurable now (see AdminWithdrawalFeePage.jsx) — WithdrawForm
+// below fetches the live value via getWithdrawalFeePreview instead, so this
+// preview can never silently drift from whatever an admin last set.
 const MIN_WITHDRAWAL_AMOUNT = 100;
-const WITHDRAWAL_FLAT_FEE = 2;
 const BALANCE_FLOOR = 20;
 
 const STATUS_COLOR = {
@@ -172,6 +174,17 @@ function WithdrawForm({ accessToken, balances, onRequested, t }) {
   const [amount, setAmount] = useState("");
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // null while loading — the fee preview below stays hidden until this
+  // resolves rather than flashing a wrong number first. Fetched fresh every
+  // time this form mounts (never cached client-side), same reasoning
+  // withdrawal_fee_service.py itself never caches this on the backend: it's
+  // exactly the kind of value an admin can change live.
+  const [fee, setFee] = useState(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    getWithdrawalFeePreview(accessToken).then((res) => setFee(Number(res.fee_amount)));
+  }, [accessToken]);
 
   // Default to the first asset the user actually holds a balance in, and
   // its first eligible network, as soon as balances load — saves a user
@@ -222,7 +235,7 @@ function WithdrawForm({ accessToken, balances, onRequested, t }) {
   const availableEntry = balances.find((b) => b.asset === asset);
   const available = availableEntry ? Number(availableEntry.amount) : 0;
   const amountNumber = Number(amount) || 0;
-  const netAmount = Math.max(amountNumber - WITHDRAWAL_FLAT_FEE, 0);
+  const netAmount = fee === null ? 0 : Math.max(amountNumber - fee, 0);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -306,8 +319,8 @@ function WithdrawForm({ accessToken, balances, onRequested, t }) {
         </div>
       )}
 
-      {asset && amountNumber > 0 && (
-        <FeeBreakdown amount={amountNumber} fee={WITHDRAWAL_FLAT_FEE} net={netAmount} asset={asset} t={t} />
+      {asset && amountNumber > 0 && fee !== null && (
+        <FeeBreakdown amount={amountNumber} fee={fee} net={netAmount} asset={asset} t={t} />
       )}
 
       {error && <ErrorText message={error} />}

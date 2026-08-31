@@ -18,7 +18,7 @@ from app.models.bot import (
 )
 from app.services.demo_profit_service import credit_demo_profit
 from app.services.fake_trading_service import generate_fake_trading_result
-from app.services import bot_chart_service, bot_fill_service, bot_service, simulated_bot_service, win_rate_service
+from app.services import bot_chart_service, bot_fill_service, bot_service, notification_service, simulated_bot_service, win_rate_service
 from app.services.binance_market_service import get_latest_price
 from app.services.redis_client import get_redis
 from app.services.simulated_bot_ledger_service import settle_simulated_session
@@ -300,6 +300,20 @@ async def stop_bot(bot_id: str, user: dict = Depends(get_current_user)):
         total_pnl = str(grid.close_all_positions(bot, Decimal(price_str)))
 
     bot_service.set_bot_status(bot["id"], "STOPPED")
+
+    # Notify the bell — hooked here rather than inside bot_service.
+    # set_bot_status() itself because that setter is shared with
+    # simulated_bot_engine.py's SESSION_CAPPED transition (an automatic,
+    # non-user-initiated status flip we deliberately don't want a
+    # notification for). This call site is the one place a bot actually
+    # moves to STOPPED as a direct result of the user's own Stop tap. See
+    # notification_service.py's module docstring for why this can never
+    # raise or block the stop above, which has already fully applied by
+    # this point regardless of whether this notification succeeds.
+    notification_service.create_notification(
+        bot["user_id"], "BOT_STOPPED", "Bot stopped", f"Your {bot['pair']} bot has been stopped.",
+    )
+
     return StopBotResponse(id=bot["id"], status="STOPPED", total_pnl=total_pnl)
 
 

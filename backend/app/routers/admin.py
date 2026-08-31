@@ -5,11 +5,14 @@
 # for why). Do not add Depends(get_current_user) anywhere in this file.
 
 from datetime import date
+from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.admin import (
+    AdminDailyStatsEntry,
     AdminLoginRequest,
+    AdminOverviewResponse,
     AdminProfile,
     AdminTokenResponse,
     ConsolidationAddressEntry,
@@ -21,10 +24,12 @@ from app.models.admin import (
     QueuedSweepEntry,
     SetConsolidationAddressRequest,
     SetWinRateRequest,
+    SetWithdrawalFeeRequest,
     SweepHistoryEntry,
     SweepHistoryResponse,
     SweepNowResponse,
     WinRateResponse,
+    WithdrawalFeeResponse,
 )
 from app.models.kyc import (
     AdminKycQueueResponse,
@@ -36,7 +41,15 @@ from app.models.withdrawal import (
     AdminWithdrawalQueueResponse,
     RejectWithdrawalRequest,
 )
-from app.services import admin_auth_service, custody_service, kyc_service, win_rate_service, withdrawal_service
+from app.services import (
+    admin_auth_service,
+    admin_overview_service,
+    custody_service,
+    kyc_service,
+    win_rate_service,
+    withdrawal_fee_service,
+    withdrawal_service,
+)
 from app.services.admin_audit_service import log_admin_action
 from app.utils.admin_auth import get_current_admin
 
@@ -58,6 +71,22 @@ def admin_login(body: AdminLoginRequest):
 @router.get("/auth/me", response_model=AdminProfile)
 def admin_me(admin: dict = Depends(get_current_admin)):
     return AdminProfile(id=admin["id"], email=admin["email"])
+
+
+# ── Dashboard overview ────────────────────────────────────────────────────────
+# The admin landing page: today's signup/deposit snapshot plus the full
+# day-by-day history the calendar heatmap and charts are built from — see
+# admin_overview_service.get_overview's docstring for exactly what "full"
+# means (every day since the very first signup or deposit, zero-filled).
+@router.get("/overview", response_model=AdminOverviewResponse)
+def get_overview(admin: dict = Depends(get_current_admin)):
+    result = admin_overview_service.get_overview()
+    return AdminOverviewResponse(
+        signups_today=result["signups_today"],
+        deposits_today_count=result["deposits_today_count"],
+        deposits_today_amount=result["deposits_today_amount"],
+        daily=[AdminDailyStatsEntry(**entry) for entry in result["daily"]],
+    )
 
 
 # ── Daily win-rate setting (module 2) ────────────────────────────────────────
@@ -261,6 +290,46 @@ def kyc_reject(submission_id: str, body: RejectKycRequest, admin: dict = Depends
         metadata={"reason": body.reason.strip()},
     )
     return AdminKycSubmissionDetail(**kyc_service.get_admin_submission_detail(submission_id))
+
+
+# ── Withdrawal fee setting ────────────────────────────────────────────────────
+# The flat fee charged on every withdrawal — see withdrawal_fee_service.py's
+# module comment. Changing it here only ever affects withdrawals REQUESTED
+# after the change; anything already requested (even if not yet approved)
+# already has its own fee_amount frozen in from whatever this setting was at
+# request time, so there's nothing to migrate or reconcile.
+@router.get("/withdrawal-fee", response_model=WithdrawalFeeResponse)
+def get_withdrawal_fee(admin: dict = Depends(get_current_admin)):
+    result = withdrawal_fee_service.get_current_fee()
+    return WithdrawalFeeResponse(
+        fee_amount=str(result["fee_amount"]),
+        is_default=result["is_default"],
+        updated_at=result["updated_at"],
+    )
+
+
+@router.put("/withdrawal-fee", response_model=WithdrawalFeeResponse)
+def set_withdrawal_fee(body: SetWithdrawalFeeRequest, admin: dict = Depends(get_current_admin)):
+    try:
+        fee_amount = Decimal(body.fee_amount)
+    except InvalidOperation:
+        raise HTTPException(status_code=400, detail="fee_amount must be a valid decimal string")
+    if fee_amount < 0:
+        raise HTTPException(status_code=400, detail="fee_amount cannot be negative")
+
+    result = withdrawal_fee_service.set_fee(fee_amount, admin["id"])
+    log_admin_action(
+        admin_id=admin["id"],
+        action="WITHDRAWAL_FEE_SET",
+        target_type="withdrawal_fee_settings",
+        target_id="singleton",
+        metadata={"fee_amount": str(fee_amount)},
+    )
+    return WithdrawalFeeResponse(
+        fee_amount=str(result["fee_amount"]),
+        is_default=result["is_default"],
+        updated_at=result["updated_at"],
+    )
 
 
 # ── Withdrawal approval queue (Phase 4, module 2) ────────────────────────────

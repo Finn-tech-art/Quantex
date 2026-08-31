@@ -77,6 +77,20 @@
      rule further down (not this variable) — this variable only controls
      the ring's color/opacity, not its width.  */
   --focus-ring: color-mix(in srgb, var(--teal-base) 40%, transparent);
+
+  /* Drop shadow for a floating panel anchored to a trigger element (right
+     now: only the notification bell's dropdown, NotificationBell.jsx) —
+     the one place in this app that needs a shadow at all; everything else
+     is either flat or uses a plain 1px --cream-line border instead. A
+     literal rgba(0,0,0,...) rather than a color-mix off an existing token
+     because a drop shadow's whole job is to read as "behind everything,
+     unrelated to the surface colors" — tying it to --ink-base or
+     --cream-line the way --focus-ring ties itself to --teal-base would
+     make the shadow itself tint with the theme, which isn't what a shadow
+     is supposed to do. Redefined (not just left alone) in both dark-mode
+     blocks below with a heavier alpha, because the same soft light-mode
+     shadow all but disappears against a dark --cream-base page. */
+  --shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* ── Dark mode ────────────────────────────────────────────────────────────
@@ -111,6 +125,7 @@
     --loss: #D97B5C;
     --warning-bg: #3A2E15;
     --warning-text: #E0B563;
+    --shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
   }
 }
 
@@ -126,6 +141,7 @@
   --loss: #D97B5C;
   --warning-bg: #3A2E15;
   --warning-text: #E0B563;
+  --shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 body {
@@ -228,6 +244,36 @@ button:not(:disabled):active {
   .qx-psi-mark .qx-psi-stem {
     animation: none !important;
     stroke-dashoffset: 0 !important;
+  }
+}
+
+/* ── Tab bar icon pop ─────────────────────────────────────────────────────
+   Plays once when a bottom-nav icon (TabBar.jsx) BECOMES the active tab —
+   a quick overshoot-then-settle scale, so switching tabs reads as a small
+   tap of feedback on the icon itself instead of an instant, motionless
+   outline->filled color swap. TabBar.jsx only ever attaches this class to
+   the newly-active icon for the render where it just became active (via a
+   changing `key` that remounts the <Icon>, restarting the animation) —
+   it's never left running continuously, so this only fires once per
+   switch, not on every re-render while a tab happens to be active. */
+@keyframes tabPop {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.qx-tab-pop {
+  animation: tabPop 0.28s ease-out;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .qx-tab-pop {
+    animation: none !important;
   }
 }
 

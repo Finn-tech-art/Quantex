@@ -38,7 +38,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.services import custody_service
+from app.services import custody_service, notification_service, withdrawal_fee_service
 from app.services.auth_service import kyc_status_code
 from app.services.network_assets import NETWORK_CONFIG
 from app.services.otp_service import generate_and_send_otp, verify_otp
@@ -64,14 +64,17 @@ MIN_WITHDRAWAL_AMOUNT = Decimal("100")
 # floor entirely.
 BALANCE_FLOOR_AFTER_WITHDRAWAL = Decimal("20")
 
-# Flat fee taken out of every withdrawal, in the SAME asset being withdrawn
-# (2 USDT fee on a USDT withdrawal, 2 USDC fee on a USDC withdrawal) — not a
-# separate charge on top of what the user typed: if someone requests to
-# withdraw 100, this fee is subtracted from that 100, so 98 is what would
-# actually go out on-chain and the full 100 is what leaves their balance.
-# Change this single value to change the fee everywhere, for every asset and
-# network at once.
-WITHDRAWAL_FLAT_FEE = Decimal("2")
+# The flat fee itself — in the SAME asset being withdrawn (2 USDT fee on a
+# USDT withdrawal, 2 USDC fee on a USDC withdrawal) — is no longer a constant
+# here. It's admin-configurable at runtime via PUT /admin/withdrawal-fee, read
+# fresh from withdrawal_fee_service.get_current_fee() at the point below where
+# it's charged (never cached — this is exactly the kind of value that gets
+# changed live from the admin panel). See withdrawal_fee_service.py's module
+# comment and 014_withdrawal_fee_setting.sql for the full design. Not a
+# separate charge on top of what the user typed either way: if someone
+# requests to withdraw 100, the fee is subtracted from that 100, so
+# 100-fee is what would actually go out on-chain and the full 100 is what
+# leaves their balance.
 
 # How long a submitted-but-not-yet-OTP-confirmed withdrawal draft survives in
 # Redis before it silently expires and the user has to start over. Matches
@@ -255,7 +258,7 @@ async def create_request(
             f"— you have {available} {asset_code} available"
         )
 
-    fee_amount = WITHDRAWAL_FLAT_FEE
+    fee_amount = withdrawal_fee_service.get_current_fee()["fee_amount"]
     net_amount = amount - fee_amount
 
     request_id = str(uuid.uuid4())
@@ -556,6 +559,17 @@ def approve_withdrawal(withdrawal_id: str, admin_id: str) -> bool:
             "be retried, and nothing was debited."
         ) from exc
 
+    # Notify the bell — see notification_service.py's module docstring for
+    # why this call can never raise or block anything above, both ledger
+    # entries having already landed for real by this point regardless of
+    # whether this notification succeeds.
+    _load_assets()
+    notification_service.create_notification(
+        row["user_id"], "WITHDRAWAL_APPROVED",
+        "Withdrawal approved",
+        f"Your withdrawal of {net_amount} {_asset_code_cache[row['asset_id']]} was approved.",
+    )
+
     return True
 
 
@@ -578,4 +592,10 @@ def reject_withdrawal(withdrawal_id: str, reason: str) -> bool:
         .eq("status_id", pending_id)
         .execute()
     )
+    if claimed.data:
+        notification_service.create_notification(
+            claimed.data[0]["user_id"], "WITHDRAWAL_REJECTED",
+            "Withdrawal rejected",
+            f"Your withdrawal request was rejected: {reason}",
+        )
     return bool(claimed.data)

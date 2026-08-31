@@ -11,6 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
 import DeltaChip from "../components/DeltaChip";
+import CoinLogo from "../components/CoinLogo";
 import LiveDot from "../components/LiveDot";
 import useFlashOnChange, { FLASH_FADE_MS } from "../hooks/useFlashOnChange";
 import { getMarkets } from "../lib/api";
@@ -239,48 +240,6 @@ function CoinRow({ ticker }) {
   );
 }
 
-// jsDelivr's mirror of the "cryptocurrency-icons" package (MIT-licensed,
-// npm: cryptocurrency-icons) — a colored SVG per coin, keyed by lowercase
-// ticker (e.g. "btc.svg", "eth.svg"). Covers the well-known coins but not
-// every long-tail listing, so onError swaps in a plain letter-avatar (same
-// look as the "Q" avatar in HomePage.jsx's LeaderboardSection) instead of
-// a broken image icon. To point this at a different icon set later, only
-// this one template string needs to change.
-function CoinLogo({ base }) {
-  const [broken, setBroken] = useState(false);
-  const src = `https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/${base.toLowerCase()}.svg`;
-
-  if (broken) {
-    return (
-      <div
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: "var(--radius-full)",
-          background: "var(--teal-pale)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "var(--font-display)",
-          fontWeight: 700,
-          fontSize: "13px",
-          color: "var(--teal-deep)",
-          flexShrink: 0,
-        }}
-      >
-        {base.charAt(0)}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={base}
-      width={34}
-      height={34}
-      onError={() => setBroken(true)}
-      style={{ borderRadius: "var(--radius-full)", flexShrink: 0 }}
-    />
-  );
-}
+// CoinLogo now lives in components/CoinLogo.jsx — extracted so HomePage's
+// Hots/Spots widget (fed by this same getMarkets data) can render the exact
+// same logo-with-fallback behavior instead of a second copy of this code.

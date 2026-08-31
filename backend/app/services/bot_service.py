@@ -5,6 +5,7 @@
 # script that seeds a paper bot have a real, shared way to create/read a bot
 # row, instead of each writing its own raw Supabase calls.
 
+from app.services import notification_service
 from app.services.supabase_client import get_supabase
 
 # Same "fetch the whole small lookup table once, cache it in a plain dict"
@@ -90,7 +91,18 @@ def create_bot(
         "is_simulated": is_simulated,
     }
     inserted = get_supabase().table("bots").insert(row).execute()
-    return inserted.data[0]["id"]
+    bot_id = inserted.data[0]["id"]
+
+    # Notify the bell — see notification_service.py's module docstring for
+    # why this call can never raise or block bot creation above, which has
+    # already succeeded for real by this point regardless of whether this
+    # notification succeeds. Fires for every bot kind (real Grid or
+    # simulated) since both funnel through this one function.
+    notification_service.create_notification(
+        user_id, "BOT_STARTED", "Bot started", f"Your {pair} bot is now running.",
+    )
+
+    return bot_id
 
 
 def get_bot(bot_id: str) -> dict | None:

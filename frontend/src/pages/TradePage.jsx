@@ -265,7 +265,28 @@ function PairTabs({ pair, onSelect }) {
               cursor: "pointer",
             }}
           >
-            <CoinGlyph asset={baseAsset(p)} size={16} />
+            {/* A ring specifically around the coin badge — separate from
+                the tab's own background/border above — so the selected
+                pair's icon reads as "picked out" on its own, the way
+                Bybit halos the active pair's glyph rather than only
+                relying on the whole tab's fill color. box-shadow (not a
+                border) so it doesn't add any layout width and can sit
+                flush against the circular glyph. color-mix keeps it tied
+                to --on-accent, the same fixed light color already used
+                for this button's text/icon once active (see index.css's
+                note on --on-accent for why that token never flips with
+                the theme toggle) — so the ring stays correctly visible
+                against the --teal-base fill in both light and dark mode. */}
+            <span
+              style={{
+                display: "flex",
+                borderRadius: "50%",
+                boxShadow: active ? "0 0 0 2px color-mix(in srgb, var(--on-accent) 55%, transparent)" : "none",
+                transition: "box-shadow 0.2s ease",
+              }}
+            >
+              <CoinGlyph asset={baseAsset(p)} size={16} />
+            </span>
             {p}
           </button>
         );
@@ -332,10 +353,7 @@ function TradeForm({ mode, onModeChange, pair, price, amount, onAmountChange, us
 
   return (
     <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-      <div style={{ display: "flex", background: "var(--cream-deep)", borderRadius: "var(--radius-md)", padding: 3 }}>
-        <ModeButton active={mode === "buy"} onClick={() => onModeChange("buy")} label={t("trade.buy")} kind="buy" />
-        <ModeButton active={mode === "sell"} onClick={() => onModeChange("sell")} label={t("trade.sell")} kind="sell" />
-      </div>
+      <ModeToggle mode={mode} onChange={onModeChange} buyLabel={t("trade.buy")} sellLabel={t("trade.sell")} />
 
       <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
         <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "11px", color: "var(--ink-soft)" }}>
@@ -405,27 +423,90 @@ function TradeForm({ mode, onModeChange, pair, price, amount, onAmountChange, us
   );
 }
 
-function ModeButton({ active, onClick, label, kind }) {
-  const activeColor = kind === "buy" ? "var(--gain)" : "var(--loss)";
+// Bybit-style segmented control — ONE pill slides between the two sides
+// and morphs its own color (gain green for Buy, loss red for Sell),
+// rather than each button independently flipping its own background on
+// and off the way the old ModeButton did. The two <button>s sit on top of
+// the sliding pill (z-index: 1, transparent background of their own) as
+// plain tap targets; only their TEXT color still switches between
+// --on-accent (currently riding on top of the pill) and --ink-soft (not
+// selected) — same two colors ModeButton always used, just no longer
+// paired with a background on the button itself.
+function ModeToggle({ mode, onChange, buyLabel, sellLabel }) {
+  const isBuy = mode === "buy";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1,
-        background: active ? activeColor : "none",
-        color: active ? "var(--on-accent)" : "var(--ink-soft)",
-        border: "none",
-        borderRadius: "var(--radius-sm)",
-        padding: "9px 0",
-        fontFamily: "var(--font-body)",
-        fontWeight: 700,
-        fontSize: "12.5px",
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
+    <div style={{ position: "relative", display: "flex", background: "var(--cream-deep)", borderRadius: "var(--radius-md)", padding: 3 }}>
+      {/* The sliding pill. Sized to exactly half the track (this is a
+          2-option control) and moved with `transform: translateX` rather
+          than animating `left` — transform is what the browser can
+          animate on its compositor thread without re-running layout on
+          every frame, so the slide stays smooth even on a slow device.
+          translateX(100%) shifts it by exactly its OWN width (a
+          percentage transform is relative to the element's own box), so
+          it lands flush against the track's right inner edge regardless
+          of the track's actual pixel width. Extending this to a 3rd mode
+          later would mean width: "calc(33.33% - 3px)" and translateX
+          steps of 0%/100%/200%. */}
+      <div
+        style={{
+          position: "absolute",
+          top: 3,
+          bottom: 3,
+          left: 3,
+          width: "calc(50% - 3px)",
+          borderRadius: "var(--radius-sm)",
+          background: isBuy ? "var(--gain)" : "var(--loss)",
+          transform: isBuy ? "translateX(0%)" : "translateX(100%)",
+          // 0.22s is a deliberately snappy slide — Bybit's own segmented
+          // control moves quickly since the user is likely tapping this
+          // repeatedly while deciding. Raise this for a slower, more
+          // deliberate-feeling slide.
+          transition: "transform 0.22s ease, background-color 0.22s ease",
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => onChange("buy")}
+        style={{
+          position: "relative",
+          zIndex: 1,
+          flex: 1,
+          background: "none",
+          border: "none",
+          borderRadius: "var(--radius-sm)",
+          padding: "9px 0",
+          fontFamily: "var(--font-body)",
+          fontWeight: 700,
+          fontSize: "12.5px",
+          color: isBuy ? "var(--on-accent)" : "var(--ink-soft)",
+          transition: "color 0.22s ease",
+          cursor: "pointer",
+        }}
+      >
+        {buyLabel}
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("sell")}
+        style={{
+          position: "relative",
+          zIndex: 1,
+          flex: 1,
+          background: "none",
+          border: "none",
+          borderRadius: "var(--radius-sm)",
+          padding: "9px 0",
+          fontFamily: "var(--font-body)",
+          fontWeight: 700,
+          fontSize: "12.5px",
+          color: !isBuy ? "var(--on-accent)" : "var(--ink-soft)",
+          transition: "color 0.22s ease",
+          cursor: "pointer",
+        }}
+      >
+        {sellLabel}
+      </button>
+    </div>
   );
 }
 

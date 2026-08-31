@@ -282,7 +282,7 @@ function PriceHeader({ price, chart }) {
 
   return (
     <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-6)" }}>
-      <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "26px", color: "var(--ink-base)" }}>
+      <span className="qx-num" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "26px", color: "var(--ink-base)" }}>
         ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </span>
       <span style={{ fontFamily: "var(--font-data)", fontSize: "12px", color: isUp ? "var(--gain)" : "var(--loss)" }}>

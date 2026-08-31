@@ -179,7 +179,7 @@ function HeroCard({ totalUsd, history, range, onRangeChange, balanceHidden, onTo
         <AnimatedPsi mode="working" size={26} color="var(--on-accent)" />
       ) : (
         <>
-          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "32px", color: "var(--on-accent)" }}>
+          <span className="qx-num" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "32px", color: "var(--on-accent)" }}>
             {balanceHidden
               ? "••••••"
               : `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}

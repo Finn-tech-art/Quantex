@@ -66,6 +66,17 @@
   --space-10: 20px;
   --space-11: 22px;
   --space-16: 32px;
+
+  /* Focus ring — a soft wash of --teal-base rather than a solid color, so
+     it reads as a glow around the focused control instead of a hard
+     second border. color-mix keeps it tied to --teal-base itself (so it
+     re-tints automatically in dark mode, where --teal-base is redefined
+     to a brighter value below) instead of being a separate hardcoded
+     color that could drift out of sync with the brand teal over time. To
+     make the ring bigger/smaller, change the "3px" in the box-shadow
+     rule further down (not this variable) — this variable only controls
+     the ring's color/opacity, not its width.  */
+  --focus-ring: color-mix(in srgb, var(--teal-base) 40%, transparent);
 }
 
 /* ── Dark mode ────────────────────────────────────────────────────────────
@@ -125,6 +136,57 @@ body {
   /* Token values change instantly on toggle; this is what makes the
      surfaces/text actually animate between them instead of snapping. */
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ── Focus ring ───────────────────────────────────────────────────────────
+   Every input/button in this app sets `outline: none` inline (to drop the
+   default browser outline, which never matched this design's rounded
+   corners) but nothing ever replaced it — so until now, tabbing to or
+   clicking into a field gave literally zero visible feedback about which
+   control was focused. :focus-visible (rather than plain :focus) is what
+   makes this only show up for keyboard/assistive-tech focus and real
+   button-Tab navigation, not for every mouse click — a mouse click on a
+   text input still shows it too (that's standard :focus-visible behavior
+   for text fields), which is what you want so you can SEE you clicked
+   into the right box. */
+input:focus-visible,
+button:focus-visible,
+textarea:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: var(--teal-base);
+}
+
+/* ── Button press feedback ───────────────────────────────────────────────
+   A tiny scale-down on press (0.96 = 4% smaller) so tapping a button reads
+   as a physical press rather than a flat click with no tactile response.
+   Scoped to plain <button> elements only in this pass — <Link>-based tap
+   targets (TabBar icons, QuickTiles, "See all" links) get their own bounce
+   treatment separately, since a shrinking nav icon needs different timing
+   than a shrinking pill button. :not(:disabled) so a submitting/disabled
+   button (opacity already lowered inline) doesn't also visually "press"
+   when a tap on it does nothing. To make the press more/less noticeable,
+   change 0.96 (closer to 1 = more subtle) and the transition duration
+   below (0.08s = fast/snappy; raise it for a slower, softer squish). */
+button {
+  transition: transform 0.08s ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+/* ── Tabular numerals ─────────────────────────────────────────────────────
+   Applied only where a PROPORTIONAL font (--font-display, Space Grotesk)
+   renders a number that updates live on a poll — right now that's just
+   TradePage's big price header and HomePage's hero balance. Everywhere
+   else in the app already uses --font-data (IBM Plex Mono), which is
+   monospace already, so every digit is already a fixed width and this
+   class would do nothing there. font-variant-numeric: tabular-nums locks
+   each digit glyph to the same width so a value like "42,318.50" ticking
+   up to "42,319.10" doesn't visibly reflow the digits after it — without
+   this, a proportional font's "1" (narrow) vs "8" (wide) shift the rest
+   of the line sideways on every tick. */
+.qx-num {
+  font-variant-numeric: tabular-nums;
 }
 
 .qx-psi-bowl,

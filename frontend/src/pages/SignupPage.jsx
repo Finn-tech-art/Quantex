@@ -5,11 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import { Field, SelectField, ErrorText, PrimaryButton, Divider } from "../components/FormControls";
 import GoogleButton from "../components/GoogleButton";
-import { COUNTRIES } from "../data/countries";
-
-// Built once, outside the component, from the shared COUNTRIES list — no
-// need to recompute this array on every render since it never changes.
-const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({ value: c.code, label: c.name }));
+import { COUNTRY_OPTIONS } from "../data/countries";
 
 export default function SignupPage() {
   const { t } = useTranslation();

@@ -18,7 +18,7 @@
 // render clearly PREVIEW-tagged sample content rather than being cut, so
 // the full screen composition is visible now and can be wired to a real
 // source later without a layout change.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -360,29 +360,288 @@ function SectionHeader({ title, action }) {
   );
 }
 
-function ActiveBotsSection({ bots, loading, t }) {
+// Wraps the Active Bots list and the new Ads carousel behind a 2-pill
+// segmented toggle, in place of the section's old plain text title.
+// `view` is local-only UI state (never sent anywhere) — "bots" is the
+// default so the Active Bots list is what a user sees first, matching
+// the previous behaviour before the Ads pill existed. Switch the
+// default by changing the useState initial value below.
+function BotsAndAdsSection({ bots, loading, t }) {
+  const [view, setView] = useState("bots");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-      <SectionHeader
-        title={t("home.activeBots.title")}
-        action={
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <SegmentedToggle
+          options={[
+            { value: "bots", label: t("home.activeBots.title") },
+            { value: "ads", label: t("home.adsSection.toggleLabel") },
+          ]}
+          selected={view}
+          onSelect={setView}
+        />
+        {/* "See all" only makes sense for the bots list — the ads
+            carousel has no equivalent destination, so it's hidden
+            rather than left pointing somewhere irrelevant. */}
+        {view === "bots" && (
           <Link to="/bots" style={{ fontFamily: "var(--font-body)", fontSize: "12px", color: "var(--teal-base)", textDecoration: "none" }}>
             {t("home.activeBots.seeAll")}
           </Link>
-        }
-      />
+        )}
+      </div>
 
-      {loading ? (
-        <AnimatedPsi mode="working" size={22} color="var(--teal-base)" />
-      ) : bots.length === 0 ? (
-        <EmptyBotsCard t={t} />
+      {view === "bots" ? (
+        loading ? (
+          <AnimatedPsi mode="working" size={22} color="var(--teal-base)" />
+        ) : bots.length === 0 ? (
+          <EmptyBotsCard t={t} />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+            {bots.map((bot) => (
+              <BotCard key={bot.id} bot={bot} />
+            ))}
+          </div>
+        )
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-          {bots.map((bot) => (
-            <BotCard key={bot.id} bot={bot} />
-          ))}
-        </div>
+        <AdsCarousel t={t} />
       )}
+    </div>
+  );
+}
+
+// Two-pill segmented control — same filled-pill-on-selected look as
+// RangeTabs above, but sized for a section header (12px label vs
+// RangeTabs' 11px) and using the light-surface --cream/--teal tokens
+// instead of RangeTabs' on-dark hero-card tokens, since this sits
+// directly on the page background rather than inside --teal-deep.
+function SegmentedToggle({ options, selected, onSelect }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "2px",
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-md)",
+        padding: "2px",
+      }}
+    >
+      {options.map((opt) => {
+        const active = opt.value === selected;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onSelect(opt.value)}
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: "12.5px",
+              color: active ? "var(--on-accent)" : "var(--ink-soft)",
+              background: active ? "var(--teal-base)" : "none",
+              border: "none",
+              borderRadius: "var(--radius-sm)",
+              padding: "6px 12px",
+              cursor: "pointer",
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Sample ad slides for the Ads carousel — fake promo content (no real ad
+// system exists yet), each pairing a real photo with made-up copy from
+// i18n.js's home.adsSection block. Photos are hotlinked from Unsplash's
+// image CDN (images.unsplash.com — Unsplash's license allows this, no
+// API key needed for a plain <img>/background-image request); swap any
+// `image` value here for a different photo's `photo-<id>` URL to change
+// what a slide shows. Add or remove rows here (and a matching
+// slideN key in i18n.js) to change how many slides the carousel has.
+const AD_SLIDES = [
+  { image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&q=80&auto=format&fit=crop", tagKey: "slide1Tag", titleKey: "slide1Title", bodyKey: "slide1Body" },
+  { image: "https://images.unsplash.com/photo-1605792657660-596af9009e82?w=800&q=80&auto=format&fit=crop", tagKey: "slide2Tag", titleKey: "slide2Title", bodyKey: "slide2Body" },
+  { image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&q=80&auto=format&fit=crop", tagKey: "slide3Tag", titleKey: "slide3Title", bodyKey: "slide3Body" },
+  { image: "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=800&q=80&auto=format&fit=crop", tagKey: "slide4Tag", titleKey: "slide4Title", bodyKey: "slide4Body" },
+  { image: "https://images.unsplash.com/photo-1672911640671-65d5dfa97d26?w=800&q=80&auto=format&fit=crop", tagKey: "slide5Tag", titleKey: "slide5Title", bodyKey: "slide5Body" },
+];
+
+// Bybit-style sliding ad banner carousel. Built on native CSS scroll-snap
+// rather than a JS drag library: the slide track is a horizontally
+// scrollable flex row with scroll-snap-type: x mandatory and each slide
+// set to scroll-snap-align: start, which gives free touch/trackpad swipe
+// support with no extra code. A setInterval autoplay advances the index
+// every AUTOPLAY_MS and scrolls the track there with scrollTo({behavior:
+// "smooth"}); manual scrolling (a user swiping) is picked up by the
+// onScroll handler below, which recomputes the nearest slide index after
+// scrolling settles so the dots stay in sync either way.
+function AdsCarousel({ t }) {
+  const AUTOPLAY_MS = 4000; // change this to speed up/slow down autoplay
+  const trackRef = useRef(null);
+  const [index, setIndex] = useState(0);
+  // Guards against the onScroll handler fighting a code-driven scroll
+  // (autoplay tick or dot click) — set true right before calling
+  // track.scrollTo, then cleared by a timeout below once the smooth-
+  // scroll animation has had time to finish. A fixed timeout (rather
+  // than only clearing on touchend/mouseup) matters here: a trackpad or
+  // mouse-wheel scroll fires neither of those events, so relying on them
+  // alone would leave this flag stuck "true" forever after the very
+  // first autoplay tick and silently break manual-swipe dot syncing —
+  // 500ms comfortably outlasts the smooth-scroll distance this carousel
+  // ever covers (one card width).
+  const scrollingProgrammatically = useRef(false);
+  const scrollSettleTimer = useRef(null);
+  const programmaticClearTimer = useRef(null);
+
+  const scrollToIndex = (i) => {
+    const track = trackRef.current;
+    if (!track) return;
+    scrollingProgrammatically.current = true;
+    if (programmaticClearTimer.current) clearTimeout(programmaticClearTimer.current);
+    programmaticClearTimer.current = setTimeout(() => {
+      scrollingProgrammatically.current = false;
+    }, 500);
+    track.scrollTo({ left: i * track.clientWidth, behavior: "smooth" });
+    setIndex(i);
+  };
+
+  // Autoplay — advances one slide every AUTOPLAY_MS, wrapping back to
+  // the first slide after the last. Resets whenever `index` changes
+  // (including manual swipes or dot clicks) so a manual interaction
+  // gives the viewer the full interval on the slide they chose rather
+  // than jumping immediately.
+  useEffect(() => {
+    const id = setInterval(() => {
+      scrollToIndex((index + 1) % AD_SLIDES.length);
+    }, AUTOPLAY_MS);
+    return () => clearInterval(id);
+  }, [index]);
+
+  // Keeps the dots in sync when the viewer swipes/scrolls the track
+  // manually instead of using autoplay or the dots. Debounced on
+  // scroll-end (150ms of no further scroll events) rather than firing on
+  // every scroll tick, both for performance and because slide position
+  // is only meaningful once the scroll has actually settled.
+  const handleScroll = () => {
+    if (scrollingProgrammatically.current) return;
+    if (scrollSettleTimer.current) clearTimeout(scrollSettleTimer.current);
+    scrollSettleTimer.current = setTimeout(() => {
+      const track = trackRef.current;
+      if (!track) return;
+      const nearest = Math.round(track.scrollLeft / track.clientWidth);
+      setIndex(Math.max(0, Math.min(AD_SLIDES.length - 1, nearest)));
+    }, 150);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+      <div
+        ref={trackRef}
+        className="qx-hide-scrollbar"
+        onScroll={handleScroll}
+        style={{
+          display: "flex",
+          overflowX: "auto",
+          scrollSnapType: "x mandatory",
+          borderRadius: "var(--radius-2xl)",
+          // Hides the native scrollbar so this reads as a carousel
+          // rather than a scrollable list, while touch/trackpad swipe
+          // still works exactly the same underneath.
+          scrollbarWidth: "none",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {AD_SLIDES.map((slide, i) => (
+          <AdSlide key={i} slide={slide} t={t} />
+        ))}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: "var(--space-3)" }}>
+        {AD_SLIDES.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={`Slide ${i + 1}`}
+            onClick={() => scrollToIndex(i)}
+            style={{
+              width: i === index ? 16 : 6,
+              height: 6,
+              borderRadius: "var(--radius-full)",
+              background: i === index ? "var(--teal-base)" : "var(--cream-line)",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              transition: "width 0.2s ease, background 0.2s ease",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// One slide: a real photo as the background with a dark scrim gradient
+// (so light-on-dark text stays legible over any part of any photo)
+// and fake ad copy overlaid at the bottom-left, exactly like a Bybit
+// promo banner. flex: "0 0 100%" + scroll-snap-align makes each slide
+// occupy the full track width and snap flush when scrolled to.
+function AdSlide({ slide, t }) {
+  return (
+    <div
+      style={{
+        flex: "0 0 100%",
+        scrollSnapAlign: "start",
+        position: "relative",
+        aspectRatio: "1.9",
+        backgroundImage: `url(${slide.image})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "linear-gradient(0deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.15) 55%, rgba(0,0,0,0) 100%)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: "var(--space-8)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-3)",
+        }}
+      >
+        <span
+          style={{
+            alignSelf: "flex-start",
+            fontFamily: "var(--font-data)",
+            fontWeight: 700,
+            fontSize: "9px",
+            letterSpacing: "0.06em",
+            color: "var(--teal-deep)",
+            background: "var(--on-accent)",
+            padding: "3px 8px",
+            borderRadius: "var(--radius-xs)",
+          }}
+        >
+          {t(`home.adsSection.${slide.tagKey}`)}
+        </span>
+        <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "15px", color: "var(--on-accent)" }}>
+          {t(`home.adsSection.${slide.titleKey}`)}
+        </span>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: "11.5px", color: "rgba(255,255,255,0.85)" }}>
+          {t(`home.adsSection.${slide.bodyKey}`)}
+        </span>
+      </div>
     </div>
   );
 }

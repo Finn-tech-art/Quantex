@@ -4,6 +4,7 @@ from gotrue.errors import AuthError
 from app.models.auth import (
     LoginRequest,
     RefreshRequest,
+    SetCountryRequest,
     SignupRequest,
     TokenResponse,
     UserProfile,
@@ -67,6 +68,28 @@ def me(user: dict = Depends(get_current_user)):
         first_name=user.get("first_name"),
         last_name=user.get("last_name"),
         country=user.get("country"),
+    )
+
+
+@router.put("/country", response_model=UserProfile)
+def set_country(body: SetCountryRequest, user: dict = Depends(get_current_user)):
+    # Backs the one-time picker in ProtectedRoute.jsx — see
+    # auth_service.set_country's docstring for who ends up here and why.
+    # Rebuilt from `user` (already fetched by get_current_user above) rather
+    # than a second query, with country swapped for the just-written value —
+    # same shape me() below returns.
+    auth_service.set_country(user["id"], body.country)
+    return UserProfile(
+        id=user["id"],
+        email=user["email"],
+        referral_code=user["referral_code"],
+        kyc_status=auth_service.kyc_status_code(user["kyc_status_id"]),
+        email_verified=user["email_verified"],
+        created_at=user["created_at"],
+        avatar_url=user.get("avatar_url"),
+        first_name=user.get("first_name"),
+        last_name=user.get("last_name"),
+        country=body.country,
     )
 
 

@@ -119,6 +119,12 @@ export default function MarketsPage() {
 }
 
 function SearchBox({ value, onChange, placeholder }) {
+  // Reserves room on the right for the clear button ONLY once there's
+  // something to clear — an empty box keeps its plain single-icon padding
+  // rather than always leaving dead space on the right for a button that
+  // isn't there yet.
+  const hasValue = value.length > 0;
+
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
       <div style={{ position: "absolute", left: 14, display: "flex", pointerEvents: "none" }}>
@@ -134,7 +140,7 @@ function SearchBox({ value, onChange, placeholder }) {
           background: "var(--cream-deep)",
           border: "1px solid var(--cream-line)",
           borderRadius: "var(--radius-md)",
-          padding: "11px 14px 11px 38px",
+          padding: `11px ${hasValue ? 38 : 14}px 11px 38px`,
           fontFamily: "var(--font-body)",
           fontSize: "13px",
           color: "var(--ink-base)",
@@ -142,6 +148,29 @@ function SearchBox({ value, onChange, placeholder }) {
           boxSizing: "border-box",
         }}
       />
+      {hasValue && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          aria-label="Clear search"
+          style={{
+            position: "absolute",
+            right: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 22,
+            height: 22,
+            background: "var(--cream-line)",
+            border: "none",
+            borderRadius: "var(--radius-full)",
+            padding: 0,
+            cursor: "pointer",
+          }}
+        >
+          <Icon name="close" size={11} color="var(--ink-soft)" />
+        </button>
+      )}
     </div>
   );
 }

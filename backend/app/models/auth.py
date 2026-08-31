@@ -38,6 +38,16 @@ class VerifyEmailConfirmRequest(BaseModel):
     code: str
 
 
+class SetCountryRequest(BaseModel):
+    # Same ISO 3166-1 alpha-2 code SignupRequest.country uses. This endpoint
+    # backs the one-time country picker in ProtectedRoute.jsx, which every
+    # signed-in user with a still-null country gets routed through — most
+    # commonly a Google OAuth signup, which never goes through SignupRequest
+    # at all, but also any pre-existing account from before country was
+    # collected.
+    country: str
+
+
 class UserProfile(BaseModel):
     id: str
     email: str

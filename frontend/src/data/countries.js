@@ -191,3 +191,9 @@ export const COUNTRIES = [
   { code: "ZM", name: "Zambia" },
   { code: "ZW", name: "Zimbabwe" },
 ];
+
+// Pre-shaped for FormControls' SelectField (value/label pairs) — computed
+// once here so every screen with a country dropdown (SignupPage,
+// ProtectedRoute's one-time picker) shares the same array instead of each
+// remapping COUNTRIES on its own.
+export const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({ value: c.code, label: c.name }));

@@ -28,6 +28,12 @@ const resources = {
         countryPlaceholder: 'Select country',
         continueWithGoogle: 'Continue with Google',
         or: 'or',
+        completeProfile: {
+          title: 'One more thing',
+          subtitle: "We don't have a country on file for your account yet — pick yours to continue.",
+          submit: 'Continue',
+          submitting: 'Saving…',
+        },
       },
       wallet: {
         title: 'Wallet',

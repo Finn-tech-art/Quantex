@@ -70,6 +70,17 @@ export function me(accessToken) {
   });
 }
 
+// Backs the one-time country picker ProtectedRoute.jsx shows any signed-in
+// user whose profile still has country = null — most commonly a Google
+// OAuth signup, which never passes through signup() above at all.
+export function setCountry(accessToken, country) {
+  return request("/auth/country", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ country }),
+  });
+}
+
 export function sendVerifyEmailOtp(accessToken) {
   return request("/auth/verify-email/send", {
     method: "POST",

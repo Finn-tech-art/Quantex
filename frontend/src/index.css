@@ -189,6 +189,14 @@ button:not(:disabled):active {
   font-variant-numeric: tabular-nums;
 }
 
+/* Used by HomePage's AdsCarousel track — Firefox is handled inline via
+   the scrollbar-width style property, but Chrome/Safari/Edge only ever
+   respect the older ::-webkit-scrollbar pseudo-element, which can't be
+   reached from an inline style prop, hence this small utility class. */
+.qx-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .qx-psi-bowl,
 .qx-psi-stem {
   stroke-dasharray: 1 1;

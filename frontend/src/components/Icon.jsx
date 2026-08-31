@@ -342,6 +342,18 @@ const ICONS = {
       </>
     ),
   },
+
+  // Plain X — used as the "clear this input" glyph inside MarketsPage.jsx's
+  // search box once it has text typed into it. Only an outline variant
+  // exists; nothing renders this filled.
+  close: {
+    outline: (color) => (
+      <>
+        <path d="M6 6l12 12" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M18 6L6 18" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      </>
+    ),
+  },
 };
 
 /**

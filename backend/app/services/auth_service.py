@@ -183,3 +183,20 @@ def refresh(refresh_token: str) -> dict:
 
 def mark_email_verified(user_id: str) -> None:
     get_supabase().table("users").update({"email_verified": True}).eq("id", user_id).execute()
+
+
+def set_country(user_id: str, country: str) -> dict:
+    """Backs PUT /auth/country — the one-time picker ProtectedRoute.jsx shows
+    a signed-in user whose profile still has country = null (always true for
+    a fresh Google OAuth signup, since that flow never passes through
+    SignupRequest; also true for any pre-existing account from before country
+    was collected at all). Returns the updated row so the router can build a
+    fresh UserProfile without a second round-trip."""
+    updated = (
+        get_supabase()
+        .table("users")
+        .update({"country": country})
+        .eq("id", user_id)
+        .execute()
+    )
+    return updated.data[0]

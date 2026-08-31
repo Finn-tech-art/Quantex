@@ -310,11 +310,6 @@ const APP_URL = "https://trading.onquantex.com";
     align-items: center;
     gap: var(--space-10);
     flex-shrink: 0;
-    /* Keeps the buttons from ever sitting flush against whatever's to
-       their left — on desktop that's .qx-links (which already has its
-       own gap from .qx-nav-inner), on mobile it's the hamburger button
-       right next to it, which had no breathing room of its own before. */
-    margin-left: var(--space-10);
   }
 
   /* Hidden by default (desktop) — only shown inside the 720px media query
@@ -343,6 +338,16 @@ const APP_URL = "https://trading.onquantex.com";
        the 72px height was sized for the full desktop link row. */
     .qx-nav-inner {
       height: 56px;
+      /* The 48px (--space-24) desktop gap was sized for a 3-item row with
+         .qx-links (flex:1) soaking up all the space between brand and
+         actions. Below 720px .qx-links is display:none and drops out of
+         the flex row entirely, leaving just brand + hamburger + actions —
+         48px between EACH of those, on top of Log in/Trade Now's own
+         width, was wide enough to push Trade Now past the edge of the
+         screen on real phone widths. This is now the ONLY source of
+         spacing between them (see .qx-actions above, which no longer
+         adds its own margin-left on top of this). */
+      gap: var(--space-8);
     }
     .qx-brand {
       font-size: 17px;
@@ -353,6 +358,20 @@ const APP_URL = "https://trading.onquantex.com";
     }
     .qx-menu-toggle {
       display: inline-flex;
+      width: 32px;
+      height: 32px;
+    }
+    /* Buttons shrink as soon as the hamburger appears, not just on the
+       very smallest phones — three flex items now have to share one row
+       instead of two, so the desktop-sized buttons (16px/32px padding)
+       no longer reliably fit even on a mid-size phone. */
+    .qx-actions {
+      gap: var(--space-6);
+    }
+    .qx-actions .qx-btn-primary,
+    .qx-actions .qx-btn-secondary {
+      padding: var(--space-6) var(--space-10);
+      font-size: 14px;
     }
 
     /* .qx-links becomes a slide-down panel instead of a horizontal row:
@@ -428,19 +447,27 @@ const APP_URL = "https://trading.onquantex.com";
     }
   }
   @media (max-width: 400px) {
-    /* Below ~400px even "Log in" + "Trade Now" side by side gets tight —
-       shrink the buttons' own padding rather than drop "Log in"
-       entirely, so both stay one tap away. */
-    .qx-actions {
-      gap: var(--space-8);
+    /* Below ~400px, brand + hamburger + both buttons on one row needs
+       every bit of the 720px tier's spacing squeezed further still —
+       tighter row gap, tighter gap between the two buttons, and smaller
+       buttons again on top of the 720px block's already-reduced size.
+       No :global() needed on the button selectors below — these two <a>
+       tags are part of THIS component's own template above, so Astro
+       already scopes them to Nav.astro like everything else here. */
+    .qx-nav-inner {
+      gap: var(--space-6);
     }
-    /* No :global() needed — these two <a> tags are part of THIS
-       component's own template above, so Astro already scopes them to
-       Nav.astro like everything else here. */
+    .qx-menu-toggle {
+      width: 30px;
+      height: 30px;
+    }
+    .qx-actions {
+      gap: var(--space-4);
+    }
     .qx-actions .qx-btn-primary,
     .qx-actions .qx-btn-secondary {
-      padding: var(--space-6) var(--space-10);
-      font-size: 14px;
+      padding: var(--space-4) var(--space-8);
+      font-size: 13px;
     }
   }
 </style>

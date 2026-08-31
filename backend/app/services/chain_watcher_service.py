@@ -7,7 +7,7 @@ from tronpy.keys import to_base58check_address
 from tronpy.providers import HTTPProvider
 
 from app.config import settings
-from app.services import notification_service
+from app.services import notification_service, withdrawal_unlock_fee_service
 from app.services.network_assets import NETWORK_CONFIG
 from app.services.supabase_client import get_supabase
 
@@ -75,6 +75,21 @@ def _address_for_user(user_id: str, network_code: str) -> str | None:
 def _credit_deposit(user_id: str, asset_code: str, network_code: str, amount: Decimal, tx_hash: str) -> bool:
     """Returns True if this was a genuinely new credit, False if it was a
     dedup no-op (already processed in an earlier sweep/check)."""
+    # Withdrawal unlock fees (see withdrawal_unlock_fee_service.py's module
+    # comment for the full mechanism) get first look at every incoming
+    # transfer, before it's ever treated as an ordinary deposit — if this
+    # user has an open "I'm about to pay fee X" intent on this network and
+    # this transfer's amount matches it, it's claimed there instead: no
+    # `balances`/`ledger_entries` row is written for it at all, which is
+    # what keeps it a pure platform fee rather than withdrawable money. The
+    # overwhelming common case (no fee pending) falls straight through.
+    if withdrawal_unlock_fee_service.try_claim_as_fee_payment(user_id, network_code, asset_code, amount, tx_hash):
+        logger.info(
+            "Claimed as withdrawal-unlock-fee payment (not credited as balance): user=%s network=%s asset=%s amount=%s tx=%s",
+            user_id, network_code, asset_code, amount, tx_hash,
+        )
+        return True
+
     # record_ledger_entry() is the only sanctioned ledger write path — its
     # own (network_id, tx_hash) dedup table makes it safe to call this again
     # for a transfer we've already credited before; it just no-ops. Known

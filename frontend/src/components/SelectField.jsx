@@ -60,6 +60,7 @@ export default function SelectField({
   renderIcon,
   renderLabel = (opt) => opt,
   placeholder = "Select",
+  renderTrigger,
 }) {
   const [open, setOpen] = useState(false);
 
@@ -67,44 +68,59 @@ export default function SelectField({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-      {label && (
+      {label && !renderTrigger && (
         <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "11px", color: "var(--ink-soft)" }}>
           {label}
         </span>
       )}
 
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-5)",
-          width: "100%",
-          background: "var(--cream-deep)",
-          border: "1px solid var(--cream-line)",
-          borderRadius: "var(--radius-lg)",
-          padding: "10px 14px",
-          fontFamily: "var(--font-body)",
-          fontWeight: 600,
-          fontSize: "13px",
-          color: "var(--ink-base)",
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        {value ? renderIcon(value) : null}
-        <span style={{ flex: 1 }}>{value ? renderLabel(value) : placeholder}</span>
-        {/* Rotates to point up while the sheet is open — a small hint that
-            tapping again (well, tapping the backdrop, but this visually
-            says "this control is currently expanded") would collapse it,
-            matching a native <select>'s own arrow convention. */}
-        <Icon
-          name="chevronDown"
-          size={16}
-          color="var(--ink-soft)"
-        />
-      </button>
+      {/* renderTrigger is an escape hatch for a call site whose trigger
+          can't use the default full-width form-field look below — e.g.
+          HomePage/WalletPage's display-currency picker, which needs a
+          compact inline "USD ▾" control sitting on a dark hero card
+          instead of a light --cream-deep box. When provided, it's handed
+          the current value and an `open` function to call on tap; this
+          component still owns everything below (the open/close state and
+          the BottomSheet option list), so a custom trigger only changes
+          how the collapsed control LOOKS, never how selection works. Every
+          existing call site (Trade/Deposit/Withdraw/CreateBot) omits this
+          and gets the exact default button unchanged. */}
+      {renderTrigger ? (
+        renderTrigger({ value, open: () => setOpen(true) })
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-5)",
+            width: "100%",
+            background: "var(--cream-deep)",
+            border: "1px solid var(--cream-line)",
+            borderRadius: "var(--radius-lg)",
+            padding: "10px 14px",
+            fontFamily: "var(--font-body)",
+            fontWeight: 600,
+            fontSize: "13px",
+            color: "var(--ink-base)",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          {value ? renderIcon(value) : null}
+          <span style={{ flex: 1 }}>{value ? renderLabel(value) : placeholder}</span>
+          {/* Rotates to point up while the sheet is open — a small hint that
+              tapping again (well, tapping the backdrop, but this visually
+              says "this control is currently expanded") would collapse it,
+              matching a native <select>'s own arrow convention. */}
+          <Icon
+            name="chevronDown"
+            size={16}
+            color="var(--ink-soft)"
+          />
+        </button>
+      )}
 
       <BottomSheet open={open} onClose={() => setOpen(false)}>
         {label && (

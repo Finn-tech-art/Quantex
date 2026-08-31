@@ -38,7 +38,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.services import custody_service, notification_service, withdrawal_fee_service
+from app.services import custody_service, notification_service, withdrawal_fee_service, withdrawal_unlock_fee_service
 from app.services.auth_service import kyc_status_code
 from app.services.network_assets import NETWORK_CONFIG
 from app.services.otp_service import generate_and_send_otp, verify_otp
@@ -233,6 +233,18 @@ async def create_request(
         raise WithdrawalValidationError(
             "Your identity must be verified before you can withdraw — complete KYC first"
         )
+
+    # Withdrawal unlock fees — a completely separate mechanic from
+    # fee_amount below (which is auto-deducted from THIS withdrawal's
+    # amount). This is a platform-wide gate: while any fee type is active,
+    # every user must pay it once, as its own separate on-chain payment
+    # (see withdrawal_unlock_fee_service.py), before they can request ANY
+    # withdrawal at all. Checked here, first, before any of the
+    # amount/balance validation below even runs.
+    unpaid_fees = withdrawal_unlock_fee_service.get_unpaid_active_fees_for_user(user["id"])
+    if unpaid_fees:
+        owed = ", ".join(f"{f['name']} ({f['amount']} {f['asset']})" for f in unpaid_fees)
+        raise WithdrawalValidationError(f"You need to pay the following before you can withdraw: {owed}")
 
     if network_code not in ASSET_NETWORKS.get(asset_code, []):
         raise WithdrawalValidationError(f"{asset_code} cannot be withdrawn over the {network_code} network")

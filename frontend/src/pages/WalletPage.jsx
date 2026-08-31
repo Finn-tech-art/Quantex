@@ -5,6 +5,10 @@ import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
 import CoinGlyph from "../components/CoinGlyph";
+import CurrencyPicker from "../components/CurrencyPicker";
+import useAssetPrices from "../hooks/useAssetPrices";
+import useDisplayCurrency from "../hooks/useDisplayCurrency";
+import { convertUsdTo, totalUsdValue } from "../lib/currency";
 import { getActivity, getBalances } from "../lib/api";
 
 const KYC_DOT_COLOR = {
@@ -22,6 +26,14 @@ export default function WalletPage() {
   const [balances, setBalances] = useState(null);
   const [activity, setActivity] = useState(null);
   const activityRef = useRef(null);
+  // Live USD price per asset — see lib/currency.js's module comment for
+  // why summing raw balance quantities 1:1 (the old `totalUsd` line just
+  // below used to do exactly that) undercounts any non-stablecoin
+  // balance, and useAssetPrices.js for where this comes from.
+  const prices = useAssetPrices(accessToken);
+  // Shared with HomePage's identical picker via localStorage — see
+  // useDisplayCurrency.js.
+  const [currency, setCurrency] = useDisplayCurrency();
 
   useEffect(() => {
     if (!accessToken) return;
@@ -29,7 +41,12 @@ export default function WalletPage() {
     getActivity(accessToken).then((res) => setActivity(res.entries));
   }, [accessToken]);
 
-  const totalUsd = (balances || []).reduce((sum, b) => sum + Number(b.amount), 0);
+  // null (not a wrong number) until balances have loaded AND every held
+  // asset is priced — see totalUsdValue()'s own doc comment.
+  const totalUsd = balances ? totalUsdValue(balances, prices) : null;
+  // The figure HeroCard actually shows — totalUsd itself for "USD", or
+  // that total divided by the chosen coin's live price otherwise.
+  const displayValue = convertUsdTo(totalUsd, currency, prices);
 
   return (
     <div style={{ paddingTop: "var(--space-11)" }}>
@@ -37,8 +54,10 @@ export default function WalletPage() {
         <TopNav t={t} />
 
         <HeroCard
-          totalUsd={totalUsd}
-          loading={balances === null}
+          displayValue={displayValue}
+          currency={currency}
+          onCurrencyChange={setCurrency}
+          loading={displayValue === null}
           // Withdraw's destination depends on KYC status, exactly like the
           // KycStrip link below it: an APPROVED user goes straight to the
           // withdrawal form, anyone else is sent to start/check KYC instead
@@ -102,7 +121,12 @@ function ActionPill({ label, onClick, disabled }) {
   );
 }
 
-function HeroCard({ totalUsd, loading, onWithdrawClick, onHistoryClick, t }) {
+function HeroCard({ displayValue, currency, onCurrencyChange, loading, onWithdrawClick, onHistoryClick, t }) {
+  // Coin-equivalent amounts need more decimal places than a dollar figure
+  // to read as meaningful (e.g. "0.001846 BTC" rather than "0.00 BTC") —
+  // same threshold HomePage's own BalanceFigure uses.
+  const decimals = currency === "USD" ? 2 : 6;
+
   return (
     <div
       style={{
@@ -114,22 +138,27 @@ function HeroCard({ totalUsd, loading, onWithdrawClick, onHistoryClick, t }) {
         gap: "var(--space-8)",
       }}
     >
-      <span
-        style={{
-          fontFamily: "var(--font-data)",
-          fontSize: "9px",
-          letterSpacing: "0.08em",
-          color: "var(--teal-sage)",
-        }}
-      >
-        {t("wallet.totalBalance").toUpperCase()}
-      </span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span
+          style={{
+            fontFamily: "var(--font-data)",
+            fontSize: "9px",
+            letterSpacing: "0.08em",
+            color: "var(--teal-sage)",
+          }}
+        >
+          {t("wallet.totalBalance").toUpperCase()}
+        </span>
+        <CurrencyPicker currency={currency} onChange={onCurrencyChange} />
+      </div>
 
       {loading ? (
         <AnimatedPsi mode="working" size={26} color="var(--on-accent)" />
       ) : (
         <span style={{ fontFamily: "var(--font-data)", fontWeight: 600, fontSize: "28px", color: "var(--on-accent)" }}>
-          ${totalUsd.toFixed(2)}
+          {currency === "USD"
+            ? `$${displayValue.toFixed(decimals)}`
+            : `${displayValue.toFixed(decimals)} ${currency}`}
         </span>
       )}
 
@@ -237,48 +266,80 @@ function ActivitySection({ entries, t }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
           {entries.map((e, i) => (
-            <div
-              key={`${e.tx_hash || "internal"}-${i}`}
-              style={{
-                background: "var(--cream-deep)",
-                border: "1px solid var(--cream-line)",
-                borderRadius: "var(--radius-lg)",
-                padding: "10px 14px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-                <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "12.5px", color: "var(--ink-base)" }}>
-                  {e.entry_type} · {e.network || "internal"}
-                </span>
-                <span style={{ fontFamily: "var(--font-data)", fontSize: "9.5px", color: "var(--ink-soft)" }}>
-                  {new Date(e.created_at).toLocaleString()}
-                </span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--space-2)" }}>
-                <span style={{ fontFamily: "var(--font-data)", fontSize: "12.5px", color: "var(--ink-base)" }}>
-                  +{e.amount} {e.asset}
-                </span>
-                <span
-                  style={{
-                    background: "var(--teal-pale)",
-                    color: "var(--teal-deep)",
-                    borderRadius: "var(--radius-sm)",
-                    padding: "2px 7px",
-                    fontFamily: "var(--font-data)",
-                    fontWeight: 600,
-                    fontSize: "8.5px",
-                  }}
-                >
-                  {t("wallet.completed").toUpperCase()}
-                </span>
-              </div>
-            </div>
+            <ActivityRow key={`${e.tx_hash || "internal"}-${i}`} entry={e} t={t} />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// `amount` comes straight from the ledger as a SIGNED decimal string
+// (positive = credit, negative = debit — see ledger_entries.amount's own
+// column comment in the schema) — the row that used to render this
+// hardcoded a "+" in front of every entry regardless of sign, which for a
+// debit like a withdrawal or fee produced a broken-looking "+-30.00"
+// (a literal double sign) instead of just "-30.00". This version only
+// adds "+" for an actual credit and otherwise trusts the string's own
+// leading "-", and picks the row's icon/color from that same sign —
+// exactly the deposit/withdrawal direction split TradePage's own
+// TradeHistory rows already use, just generalized to every ledger entry
+// type instead of only BUY/SELL.
+function ActivityRow({ entry, t }) {
+  const isCredit = Number(entry.amount) >= 0;
+  const directionColor = isCredit ? "var(--gain)" : "var(--loss)";
+  const typeLabel = t(`wallet.activityTypes.${entry.entry_type}`, { defaultValue: entry.entry_type });
+
+  return (
+    <div
+      style={{
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "10px 14px",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-6)",
+      }}
+    >
+      {/* A soft tinted circle behind the direction arrow — same
+          color-mix-off-a-token approach DeltaChip.jsx uses for its own
+          background wash, so this stays correct in dark mode without a
+          separate dark-mode override. */}
+      <div
+        style={{
+          flexShrink: 0,
+          width: 34,
+          height: 34,
+          borderRadius: "50%",
+          background: `color-mix(in srgb, ${directionColor} 16%, transparent)`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Icon name={isCredit ? "deposit" : "withdraw"} size={16} color={directionColor} />
+      </div>
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "12.5px", color: "var(--ink-base)" }}>
+          {typeLabel}
+        </span>
+        <span style={{ fontFamily: "var(--font-data)", fontSize: "9.5px", color: "var(--ink-soft)" }}>
+          {new Date(entry.created_at).toLocaleString()}
+          {/* Only entries that actually moved over a real chain (deposits,
+              withdrawals) carry a network — internal ledger entries (fees,
+              bot allocations, bonuses) have none, and previously showed a
+              misleading literal "internal" here instead of just omitting
+              it. */}
+          {entry.network ? ` · ${entry.network}` : ""}
+        </span>
+      </div>
+
+      <span style={{ fontFamily: "var(--font-data)", fontSize: "12.5px", color: directionColor, whiteSpace: "nowrap" }}>
+        {isCredit ? "+" : ""}
+        {entry.amount} {entry.asset}
+      </span>
     </div>
   );
 }

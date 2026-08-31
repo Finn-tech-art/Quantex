@@ -47,7 +47,23 @@ const resources = {
         noAssets: 'No balances yet — make a deposit to get started.',
         recentActivity: 'Recent activity',
         noActivity: 'No activity yet.',
-        completed: 'Completed',
+        // Human labels for every ledger_entry_types row (see
+        // quantex-schema.sql) — keyed by the exact entry_type string the
+        // backend returns from GET /wallet/activity. Add a line here
+        // whenever a new row is added to that lookup table, or
+        // ActivitySection's fallback (WalletPage.jsx) will just show the
+        // raw backend code (e.g. "FEE_SESSION_UNLOCK") instead of this.
+        activityTypes: {
+          DEPOSIT: 'Deposit',
+          WITHDRAWAL: 'Withdrawal',
+          BOT_ALLOCATION: 'Bot allocation',
+          BOT_DEALLOCATION: 'Bot deallocation',
+          FEE_BOT_CREATION: 'Bot creation fee',
+          FEE_SESSION_UNLOCK: 'Session unlock fee',
+          FEE_WITHDRAWAL: 'Withdrawal fee',
+          BONUS: 'Bonus',
+          REFERRAL_CREDIT: 'Referral credit',
+        },
       },
       deposit: {
         title: 'Deposit',

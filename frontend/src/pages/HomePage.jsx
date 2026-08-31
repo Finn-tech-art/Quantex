@@ -29,20 +29,38 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import CoinLogo from "../components/CoinLogo";
+import CurrencyPicker from "../components/CurrencyPicker";
 import DeltaChip from "../components/DeltaChip";
 import Icon from "../components/Icon";
 import NotificationBell from "../components/NotificationBell";
 import VerifyEmailPrompt from "../components/VerifyEmailPrompt";
+import useAssetPrices from "../hooks/useAssetPrices";
 import useCountUp from "../hooks/useCountUp";
+import useDisplayCurrency from "../hooks/useDisplayCurrency";
+import { convertUsdTo, totalUsdValue } from "../lib/currency";
 import { getBalances, getMarkets, getPortfolioHistory, listBots } from "../lib/api";
 
 export default function HomePage() {
   const { t } = useTranslation();
   const { user, accessToken } = useAuth();
 
-  const [totalUsd, setTotalUsd] = useState(null); // null = still loading
+  // Raw balances (asset + quantity, e.g. { asset: "BTC", amount: "0.002" })
+  // rather than a pre-summed dollar figure — see lib/currency.js's module
+  // comment for why: turning this into an actual USD total needs each
+  // non-stablecoin asset's LIVE price, which totalUsdValue() below handles.
+  const [balances, setBalances] = useState(null); // null = still loading
   const [history, setHistory] = useState(null); // null = still loading, [] = loaded but empty
   const [bots, setBots] = useState(null);
+  // Live USD price per asset (from the same feed MarketsPage uses) — see
+  // useAssetPrices.js. Needed to turn `balances` into a real dollar total,
+  // and to convert that total into a coin-equivalent when `currency` below
+  // isn't "USD".
+  const prices = useAssetPrices(accessToken);
+  // Which currency the balance below is shown in ("USD", "BTC", "ETH", or
+  // "SOL") — a single preference shared with WalletPage's identical picker
+  // (see useDisplayCurrency.js for why this lives in localStorage rather
+  // than component state).
+  const [currency, setCurrency] = useDisplayCurrency();
   // Feeds the Hots/Spots tabs inside NewsSection below — same
   // GET /market/tickers snapshot MarketsPage.jsx polls, already sorted by
   // the backend most-traded-first (see market.py). Fetched once here
@@ -62,9 +80,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!accessToken) return;
-    getBalances(accessToken).then((res) =>
-      setTotalUsd(res.balances.reduce((sum, b) => sum + Number(b.amount), 0))
-    );
+    getBalances(accessToken).then((res) => setBalances(res.balances));
     listBots(accessToken).then((res) => setBots(res.bots));
     // Swallows a failed fetch by just leaving `markets` at null forever
     // (NewsSection's Hots/Spots tabs then show their loading spinner
@@ -93,6 +109,16 @@ export default function HomePage() {
 
   if (!user) return null;
 
+  // null until balances have loaded AND every held asset has a live price
+  // (see totalUsdValue()'s own doc comment) — never a partial/undercounted
+  // number.
+  const totalUsd = balances ? totalUsdValue(balances, prices) : null;
+  // The figure actually shown — totalUsd itself when currency is "USD",
+  // or that same total divided by the chosen coin's live price otherwise.
+  // Still null (not a wrong number) if the target currency's own price
+  // isn't loaded yet.
+  const displayValue = convertUsdTo(totalUsd, currency, prices);
+
   const activeBots = (bots || []).filter((b) => b.status === "ACTIVE");
   // First name only, derived from the email's local part — there's no
   // separate "display name" field anywhere in the schema (see UserProfile
@@ -107,7 +133,9 @@ export default function HomePage() {
         {!user.email_verified && <VerifyEmailPrompt />}
 
         <HeroCard
-          totalUsd={totalUsd}
+          displayValue={displayValue}
+          currency={currency}
+          onCurrencyChange={setCurrency}
           history={history}
           range={range}
           onRangeChange={setRange}
@@ -156,15 +184,8 @@ const RANGE_OPTIONS = [
   { value: "180d", label: "180D" },
 ];
 
-function HeroCard({ totalUsd, history, range, onRangeChange, balanceHidden, onToggleBalanceHidden, t }) {
-  const loading = totalUsd === null || history === null;
-  // See useCountUp's own doc comment: this returns a plain 0 (never null)
-  // while totalUsd hasn't resolved yet, which is fine since the `loading`
-  // branch below renders the spinner instead of this number during that
-  // window — the moment totalUsd arrives, the hook animates from that
-  // seeded 0 up to the real figure, rather than the real number flashing
-  // on screen for a frame before the count-up starts.
-  const displayedTotal = useCountUp(totalUsd);
+function HeroCard({ displayValue, currency, onCurrencyChange, history, range, onRangeChange, balanceHidden, onToggleBalanceHidden, t }) {
+  const loading = displayValue === null || history === null;
   const firstClose = history && history.length > 0 ? Number(history[0].close) : null;
   const lastClose = history && history.length > 0 ? Number(history[history.length - 1].close) : null;
   const pctChange = firstClose && firstClose !== 0 ? ((lastClose - firstClose) / firstClose) * 100 : 0;
@@ -183,32 +204,31 @@ function HeroCard({ totalUsd, history, range, onRangeChange, balanceHidden, onTo
         gap: "var(--space-6)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-        <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", letterSpacing: "0.08em", color: "var(--teal-sage)" }}>
-          {t("home.hero.label")}
-        </span>
-        {/* Local-only visibility toggle — doesn't touch totalUsd itself,
-            just swaps what's rendered below between digits and dots, so
-            no re-fetch or state reset happens on click. */}
-        <button
-          type="button"
-          onClick={onToggleBalanceHidden}
-          aria-label={balanceHidden ? "Show balance" : "Hide balance"}
-          style={{ display: "flex", alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer" }}
-        >
-          <Icon name={balanceHidden ? "eyeOff" : "eye"} size={14} color="var(--teal-sage)" />
-        </button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+          <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", letterSpacing: "0.08em", color: "var(--teal-sage)" }}>
+            {t("home.hero.label")}
+          </span>
+          {/* Local-only visibility toggle — doesn't touch the underlying
+              total, just swaps what's rendered below between digits and
+              dots, so no re-fetch or state reset happens on click. */}
+          <button
+            type="button"
+            onClick={onToggleBalanceHidden}
+            aria-label={balanceHidden ? "Show balance" : "Hide balance"}
+            style={{ display: "flex", alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+          >
+            <Icon name={balanceHidden ? "eyeOff" : "eye"} size={14} color="var(--teal-sage)" />
+          </button>
+        </div>
+        <CurrencyPicker currency={currency} onChange={onCurrencyChange} />
       </div>
 
       {loading ? (
         <AnimatedPsi mode="working" size={26} color="var(--on-accent)" />
       ) : (
         <>
-          <span className="qx-num" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "32px", color: "var(--on-accent)" }}>
-            {balanceHidden
-              ? "••••••"
-              : `$${displayedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          </span>
+          <BalanceFigure key={currency} value={displayValue} currency={currency} hidden={balanceHidden} />
 
           {history.length > 1 && <Sparkline points={history} color={isUp ? "var(--gain-on-dark)" : "var(--loss)"} />}
 
@@ -221,6 +241,38 @@ function HeroCard({ totalUsd, history, range, onRangeChange, balanceHidden, onTo
         </>
       )}
     </div>
+  );
+}
+
+// The count-up animated balance figure itself, pulled out of HeroCard so
+// HeroCard can mount a FRESH one (via the `key={currency}` at its call
+// site) every time the display currency changes. Without that remount,
+// useCountUp would try to animate directly from a USD-scale number (e.g.
+// 42318.50) to a wildly different BTC-scale one (e.g. 0.62134), which
+// reads as a broken glitch, not a balance update — a currency switch
+// isn't "the balance changed", it's "the same balance, shown in a
+// different unit", so it should just show the new unit's number straight
+// away. Remounting resets useCountUp's internal state, so switching
+// currency instead plays the SAME "count up from 0" reveal a normal page
+// load gets — deliberate, not a compromise.
+function BalanceFigure({ value, currency, hidden }) {
+  // See useCountUp's own doc comment: this returns a plain 0 (never null)
+  // while `value` hasn't resolved yet, which is fine since HeroCard's own
+  // `loading` check already renders a spinner instead of this component
+  // during that window.
+  const displayed = useCountUp(value);
+  // Coin-equivalent amounts need more decimal places than a dollar figure
+  // to be meaningfully readable (e.g. "0.001846 BTC", not "0.00 BTC") —
+  // same precision MarketsPage.jsx uses for sub-$1 prices. Raise this if
+  // a future coin's typical portfolio-share amount still rounds to
+  // 0.000000 too often.
+  const decimals = currency === "USD" ? 2 : 6;
+  const formatted = displayed.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
+  return (
+    <span className="qx-num" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "32px", color: "var(--on-accent)" }}>
+      {hidden ? "••••••" : currency === "USD" ? `$${formatted}` : `${formatted} ${currency}`}
+    </span>
   );
 }
 

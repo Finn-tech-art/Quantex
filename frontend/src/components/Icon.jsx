@@ -364,6 +364,25 @@ const ICONS = {
     ),
   },
 
+  // A circled "$" — used as the "USD" option's icon wherever a currency
+  // picker lists USD alongside real coin logos (CoinGlyph) that have no
+  // dollar-sign equivalent of their own — see HomePage/WalletPage's
+  // display-currency picker.
+  dollar: {
+    outline: (color) => (
+      <>
+        <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.7" fill="none" />
+        <path
+          d="M12 6.5v11M15 9.3c0-1.1-1.3-2-3-2s-3 .9-3 2c0 1.1 1.3 1.6 3 2s3 .9 3 2c0 1.1-1.3 2-3 2s-3-.9-3-2"
+          stroke={color}
+          strokeWidth="1.4"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </>
+    ),
+  },
+
   // Plain X — used as the "clear this input" glyph inside MarketsPage.jsx's
   // search box once it has text typed into it. Only an outline variant
   // exists; nothing renders this filled.

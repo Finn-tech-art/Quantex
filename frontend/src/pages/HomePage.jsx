@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
+import DeltaChip from "../components/DeltaChip";
 import Icon from "../components/Icon";
 import VerifyEmailPrompt from "../components/VerifyEmailPrompt";
 import { getBalances, getPortfolioHistory, listBots } from "../lib/api";
@@ -93,7 +94,7 @@ export default function HomePage() {
 
         <QuickActions t={t} />
 
-        <ActiveBotsSection bots={activeBots} loading={bots === null} t={t} />
+        <BotsAndAdsSection bots={activeBots} loading={bots === null} t={t} />
 
         <LeaderboardSection t={t} />
 
@@ -412,7 +413,7 @@ function EmptyBotsCard({ t }) {
 
 function BotCard({ bot }) {
   const pnl = Number(bot.total_pnl);
-  const pnlColor = pnl > 0 ? "var(--gain)" : pnl < 0 ? "var(--loss)" : "var(--ink-soft)";
+  const pnlTone = pnl > 0 ? "up" : pnl < 0 ? "down" : "neutral";
   return (
     <Link
       to={`/bots/${bot.id}`}
@@ -433,10 +434,10 @@ function BotCard({ bot }) {
           {bot.strategy_type}
         </span>
       </div>
-      <span style={{ fontFamily: "var(--font-data)", fontSize: "13px", color: pnlColor }}>
+      <DeltaChip tone={pnlTone} fontSize="13px">
         {pnl > 0 ? "+" : ""}
         {pnl.toFixed(2)}
-      </span>
+      </DeltaChip>
     </Link>
   );
 }

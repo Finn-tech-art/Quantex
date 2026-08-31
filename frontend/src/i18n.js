@@ -22,6 +22,10 @@ const resources = {
         },
         emailLabel: 'Email',
         passwordLabel: 'Password',
+        firstNameLabel: 'First name',
+        lastNameLabel: 'Last name',
+        countryLabel: 'Country',
+        countryPlaceholder: 'Select country',
         continueWithGoogle: 'Continue with Google',
         or: 'or',
       },
@@ -313,6 +317,28 @@ const resources = {
           seeAll: 'See all',
           empty: 'No active bots yet.',
           cta: 'Create your first bot',
+        },
+        // The "Ads" pill next to Active bots — a fake promo carousel
+        // (Bybit-banner style) with no real ad system behind it yet. Each
+        // slide below is sample copy only; see AdsCarousel in HomePage.jsx
+        // for the paired background photo per slide.
+        adsSection: {
+          toggleLabel: 'Ads',
+          slide1Tag: 'NEW',
+          slide1Title: 'Grid bots just got sharper',
+          slide1Body: 'Tighter range configs, same set-and-forget simplicity.',
+          slide2Tag: 'REFERRAL',
+          slide2Title: 'Bring a friend, both get boosted',
+          slide2Body: 'Share your code — you both unlock a starting bonus.',
+          slide3Tag: 'LAUNCH WEEK',
+          slide3Title: 'Zero fees on your first 7 days',
+          slide3Body: 'Every trade this week trades commission-free.',
+          slide4Tag: 'SECURITY',
+          slide4Title: 'Your keys, your crypto',
+          slide4Body: 'Withdraw-only permissions are never granted to the bot engine.',
+          slide5Tag: 'GET STARTED',
+          slide5Title: 'New to Web3? Start in minutes',
+          slide5Body: 'Deposit, deploy a bot, and watch it trade — no experience needed.',
         },
         // Leaderboard + News have no real backend data source yet (no
         // trader-ranking system, no news source) — per the design

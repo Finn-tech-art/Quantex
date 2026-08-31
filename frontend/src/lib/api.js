@@ -44,10 +44,16 @@ async function requestForm(path, options = {}) {
   return data;
 }
 
-export function signup(email, password) {
+export function signup(email, password, firstName, lastName, country) {
   return request("/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      first_name: firstName,
+      last_name: lastName,
+      country,
+    }),
   });
 }
 

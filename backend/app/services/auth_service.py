@@ -57,7 +57,14 @@ def _resolve_referred_by(referral_code: str | None) -> str | None:
     return result.data[0]["id"] if result.data else None
 
 
-def ensure_user_profile(user_id: str, email: str, referral_code: str | None = None) -> dict:
+def ensure_user_profile(
+    user_id: str,
+    email: str,
+    referral_code: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    country: str | None = None,
+) -> dict:
     existing = (
         get_supabase().table("users").select("*").eq("id", user_id).limit(1).execute()
     )
@@ -79,6 +86,9 @@ def ensure_user_profile(user_id: str, email: str, referral_code: str | None = No
                         "referral_code": _generate_referral_code(),
                         "referred_by": referred_by,
                         "kyc_status_id": kyc_status_id,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "country": country,
                     }
                 )
                 .execute()
@@ -104,16 +114,40 @@ def ensure_user_profile(user_id: str, email: str, referral_code: str | None = No
     raise RuntimeError("Failed to generate a unique referral code after 5 attempts")
 
 
-def sign_up(email: str, password: str, referral_code: str | None = None) -> dict:
+def sign_up(
+    email: str,
+    password: str,
+    first_name: str,
+    last_name: str,
+    country: str,
+    referral_code: str | None = None,
+) -> dict:
     # With Supabase's "Confirm email" gate turned off, self-service sign_up returns
     # a usable session immediately — the account isn't gated on any Supabase-native
     # confirmation step. Our own email-verification is a separate, dashboard-driven
     # OTP flow (see otp_service) that doesn't block login.
+    #
+    # first_name/last_name/country/referral_code all get written into
+    # Supabase's user_metadata (the "options.data" bag) as well as being
+    # passed directly to ensure_user_profile() below — the direct call
+    # handles the normal case (this same request creates the profile row
+    # right now), and user_metadata is what get_current_user (utils/auth.py)
+    # falls back to reading on every later request, so the profile still
+    # gets these fields even if this call's own ensure_user_profile
+    # somehow never ran. Same belt-and-suspenders pattern this file already
+    # used for referral_code alone before this change.
     result = get_supabase_auth_client().auth.sign_up(
         {
             "email": email,
             "password": password,
-            "options": {"data": {"referral_code": referral_code} if referral_code else {}},
+            "options": {
+                "data": {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "country": country,
+                    **({"referral_code": referral_code} if referral_code else {}),
+                }
+            },
         }
     )
     if result.session is None:
@@ -122,7 +156,7 @@ def sign_up(email: str, password: str, referral_code: str | None = None) -> dict
             "'Confirm email' project setting is disabled"
         )
 
-    ensure_user_profile(result.user.id, result.user.email, referral_code)
+    ensure_user_profile(result.user.id, result.user.email, referral_code, first_name, last_name, country)
     return {
         "access_token": result.session.access_token,
         "refresh_token": result.session.refresh_token,

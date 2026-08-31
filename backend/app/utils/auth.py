@@ -23,12 +23,21 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     auth_user = response.user
-    referral_code = (auth_user.user_metadata or {}).get("referral_code")
+    metadata = auth_user.user_metadata or {}
+    referral_code = metadata.get("referral_code")
+    # first_name/last_name/country come from the same user_metadata bag
+    # sign_up() writes them into (see auth_service.sign_up's comment) — for
+    # a Google OAuth account none of these keys exist, so all three come
+    # back None here, and ensure_user_profile stores that as-is (see
+    # 013_users_signup_fields.sql for why the columns allow that).
+    first_name = metadata.get("first_name")
+    last_name = metadata.get("last_name")
+    country = metadata.get("country")
     # email_verified comes straight off the users row (see ensure_user_profile) —
     # not auth_user.email_confirmed_at, which Supabase sets on every signup now
     # that the project's "Confirm email" gate is off and no longer reflects our
     # own OTP-based verification.
-    profile = ensure_user_profile(auth_user.id, auth_user.email, referral_code)
+    profile = ensure_user_profile(auth_user.id, auth_user.email, referral_code, first_name, last_name, country)
 
     # Deliberately NOT written into the `users` table row (ensure_user_profile
     # never sees this) — it's read fresh from Supabase's own live OAuth

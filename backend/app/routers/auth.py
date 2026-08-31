@@ -28,7 +28,9 @@ def _http_error(exc: AuthError, default_status: int) -> HTTPException:
 @router.post("/signup", response_model=TokenResponse)
 def signup(body: SignupRequest):
     try:
-        tokens = auth_service.sign_up(body.email, body.password, body.referral_code)
+        tokens = auth_service.sign_up(
+            body.email, body.password, body.first_name, body.last_name, body.country, body.referral_code
+        )
     except AuthError as exc:
         raise _http_error(exc, 400)
     return TokenResponse(**tokens)
@@ -62,6 +64,9 @@ def me(user: dict = Depends(get_current_user)):
         email_verified=user["email_verified"],
         created_at=user["created_at"],
         avatar_url=user.get("avatar_url"),
+        first_name=user.get("first_name"),
+        last_name=user.get("last_name"),
+        country=user.get("country"),
     )
 
 

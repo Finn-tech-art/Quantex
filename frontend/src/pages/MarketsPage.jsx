@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
+import DeltaChip from "../components/DeltaChip";
 import LiveDot from "../components/LiveDot";
 import useFlashOnChange, { FLASH_FADE_MS } from "../hooks/useFlashOnChange";
 import { getMarkets } from "../lib/api";
@@ -147,10 +148,6 @@ function SearchBox({ value, onChange, placeholder }) {
 
 function CoinRow({ ticker }) {
   const changePercent = Number(ticker.change_percent);
-  // Same gain/loss semantic-color rule BotRow (BotsPage.jsx) and BotCard
-  // (HomePage.jsx) already use — never the teal brand color for this,
-  // always the dedicated --gain/--loss tokens.
-  const changeColor = changePercent >= 0 ? "var(--gain)" : "var(--loss)";
   const price = Number(ticker.price);
   // Binance prices span a huge range (BTC in the tens of thousands, some
   // coins worth a fraction of a cent) — a fixed 2-decimal format would
@@ -204,10 +201,10 @@ function CoinRow({ ticker }) {
         <span style={{ fontFamily: "var(--font-data)", fontSize: "13px", color: "var(--ink-base)" }}>
           ${price.toLocaleString(undefined, { minimumFractionDigits: priceDecimals, maximumFractionDigits: priceDecimals })}
         </span>
-        <span style={{ fontFamily: "var(--font-data)", fontSize: "11px", color: changeColor }}>
+        <DeltaChip tone={changePercent >= 0 ? "up" : "down"} fontSize="11px">
           {changePercent >= 0 ? "+" : ""}
           {changePercent.toFixed(2)}%
-        </span>
+        </DeltaChip>
       </div>
     </div>
   );

@@ -71,12 +71,12 @@ export function AuthProvider({ children }) {
     setAccessToken(tokens.access_token);
   }
 
-  async function signup(email, password) {
+  async function signup(email, password, firstName, lastName, country) {
     // Signup returns a usable session immediately — Supabase's "Confirm
     // email" gate is off, so there's no confirmation step blocking login.
     // Our own email verification is a separate, dashboard-driven OTP prompt
     // that never blocks access.
-    const tokens = await api.signup(email, password);
+    const tokens = await api.signup(email, password, firstName, lastName, country);
     applyTokens(tokens);
   }
 

@@ -34,6 +34,54 @@ export function Field({ label, type, value, onChange, autoComplete }) {
   );
 }
 
+// Same look as Field above, but a native <select> — used for the signup
+// country dropdown (see SignupPage.jsx). `options` is an array of
+// { value, label } pairs; pass a `placeholder` to render a disabled first
+// option (e.g. "Select country") so the field starts visibly empty instead
+// of defaulting to whatever the first real option happens to be.
+export function SelectField({ label, value, onChange, options, placeholder }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+      <span
+        style={{
+          fontFamily: "var(--font-body)",
+          fontWeight: 500,
+          fontSize: "11px",
+          color: "var(--ink-soft)",
+        }}
+      >
+        {label}
+      </span>
+      <select
+        required
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          background: "var(--cream-deep)",
+          border: "1px solid var(--cream-line)",
+          borderRadius: "var(--radius-md)",
+          padding: "13px 14px",
+          fontFamily: "var(--font-body)",
+          fontSize: "13px",
+          color: value ? "var(--ink-base)" : "var(--ink-soft)",
+          outline: "none",
+        }}
+      >
+        {placeholder && (
+          <option value="" disabled>
+            {placeholder}
+          </option>
+        )}
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function ErrorText({ message }) {
   return (
     <p

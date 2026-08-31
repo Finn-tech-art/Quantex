@@ -13,6 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
 import LiveChart from "../components/LiveChart";
+import DeltaChip from "../components/DeltaChip";
 import LiveDot from "../components/LiveDot";
 import useFlashOnChange, { FLASH_FADE_MS } from "../hooks/useFlashOnChange";
 import { ErrorText } from "../components/FormControls";
@@ -311,10 +312,10 @@ function PriceHeader({ price, chart }) {
         >
           ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
-        <span style={{ fontFamily: "var(--font-data)", fontSize: "12px", color: isUp ? "var(--gain)" : "var(--loss)" }}>
+        <DeltaChip tone={isUp ? "up" : "down"} fontSize="12px">
           {isUp ? "+" : ""}
           {pctChange.toFixed(2)}%
-        </span>
+        </DeltaChip>
       </div>
       {/* This screen's price/chart really do come from a live 15s poll of
           the Binance feed (see this file's own refresh() above) rather

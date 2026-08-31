@@ -3,16 +3,24 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
-import { Field, ErrorText, PrimaryButton, Divider } from "../components/FormControls";
+import { Field, SelectField, ErrorText, PrimaryButton, Divider } from "../components/FormControls";
 import GoogleButton from "../components/GoogleButton";
+import { COUNTRIES } from "../data/countries";
+
+// Built once, outside the component, from the shared COUNTRIES list — no
+// need to recompute this array on every render since it never changes.
+const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({ value: c.code, label: c.name }));
 
 export default function SignupPage() {
   const { t } = useTranslation();
   const { signup, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [country, setCountry] = useState("");
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -21,7 +29,7 @@ export default function SignupPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await signup(email, password);
+      await signup(email, password, firstName, lastName, country);
       navigate("/");
     } catch (err) {
       setError(err.message);
@@ -78,6 +86,20 @@ export default function SignupPage() {
           style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}
         >
           <Field
+            label={t("auth.firstNameLabel")}
+            type="text"
+            value={firstName}
+            onChange={setFirstName}
+            autoComplete="given-name"
+          />
+          <Field
+            label={t("auth.lastNameLabel")}
+            type="text"
+            value={lastName}
+            onChange={setLastName}
+            autoComplete="family-name"
+          />
+          <Field
             label={t("auth.emailLabel")}
             type="email"
             value={email}
@@ -90,6 +112,13 @@ export default function SignupPage() {
             value={password}
             onChange={setPassword}
             autoComplete="new-password"
+          />
+          <SelectField
+            label={t("auth.countryLabel")}
+            value={country}
+            onChange={setCountry}
+            options={COUNTRY_OPTIONS}
+            placeholder={t("auth.countryPlaceholder")}
           />
 
           {error && <ErrorText message={error} />}

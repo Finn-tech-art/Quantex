@@ -11,6 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
 import LiveDot from "../components/LiveDot";
+import useFlashOnChange, { FLASH_FADE_MS } from "../hooks/useFlashOnChange";
 import { getMarkets } from "../lib/api";
 
 // How often the list re-fetches from the backend. 15s matches the poll
@@ -159,13 +160,29 @@ function CoinRow({ ticker }) {
   // precision.
   const priceDecimals = price >= 1 ? 2 : 6;
 
+  // Same snap-in/fade-out mechanics as TradePage's price header (see
+  // useFlashOnChange's own doc comment) — here the flash is a background
+  // wash across the whole row card instead of a text color change, since
+  // this row already has its own --cream-deep card background to flash
+  // against, whereas the price header is bare text with no box behind it.
+  // color-mix keeps the wash tied to the real --gain/--loss/--cream-deep
+  // tokens (so it stays correct if those are ever retuned, and re-tints
+  // automatically in dark mode) rather than a hardcoded translucent hex.
+  const flash = useFlashOnChange(price);
+  const flashBackground =
+    flash && !flash.fading
+      ? `color-mix(in srgb, ${flash.direction === "up" ? "var(--gain)" : "var(--loss)"} 20%, var(--cream-deep))`
+      : "var(--cream-deep)";
+  const flashTransition = flash?.fading ? `background-color ${FLASH_FADE_MS}ms ease` : "none";
+
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        background: "var(--cream-deep)",
+        background: flashBackground,
+        transition: flashTransition,
         border: "1px solid var(--cream-line)",
         borderRadius: "var(--radius-lg)",
         padding: "10px 14px",

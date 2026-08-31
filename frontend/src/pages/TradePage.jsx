@@ -14,6 +14,7 @@ import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
 import LiveChart from "../components/LiveChart";
 import LiveDot from "../components/LiveDot";
+import useFlashOnChange, { FLASH_FADE_MS } from "../hooks/useFlashOnChange";
 import { ErrorText } from "../components/FormControls";
 import ConfirmSheet from "../components/ConfirmSheet";
 import CoinGlyph from "../components/CoinGlyph";
@@ -278,13 +279,36 @@ function PriceHeader({ price, chart }) {
   const lastClose = price !== null ? Number(price) : null;
   const pctChange = firstClose && lastClose && firstClose !== 0 ? ((lastClose - firstClose) / firstClose) * 100 : 0;
   const isUp = pctChange >= 0;
+  // Must run on every render (never after the `if (loading) return` below)
+  // — React's hooks can't be called conditionally. Passing `lastClose`
+  // (null while still loading) is safe: the hook itself treats a null
+  // value as "nothing to compare yet" and never flashes on it.
+  const flash = useFlashOnChange(lastClose);
 
   if (loading) return <AnimatedPsi mode="working" size={24} color="var(--teal-base)" />;
+
+  // See useFlashOnChange's own doc comment for the full snap-in/fade-out
+  // mechanics. In short: the instant the price ticks, this renders the
+  // number in --gain/--loss with no transition (a hard snap); one frame
+  // later it renders back in --ink-base WITH a transition turned on, so
+  // the browser eases it back down over FLASH_FADE_MS instead of also
+  // snapping off.
+  const flashColor = flash && !flash.fading ? (flash.direction === "up" ? "var(--gain)" : "var(--loss)") : "var(--ink-base)";
+  const flashTransition = flash?.fading ? `color ${FLASH_FADE_MS}ms ease` : "none";
 
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-6)" }}>
-        <span className="qx-num" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "26px", color: "var(--ink-base)" }}>
+        <span
+          className="qx-num"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 700,
+            fontSize: "26px",
+            color: flashColor,
+            transition: flashTransition,
+          }}
+        >
           ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
         <span style={{ fontFamily: "var(--font-data)", fontSize: "12px", color: isUp ? "var(--gain)" : "var(--loss)" }}>

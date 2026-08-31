@@ -17,13 +17,23 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+import QRCode from "qrcode";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import CoinGlyph from "../components/CoinGlyph";
+import Icon from "../components/Icon";
 import NetworkGlyph from "../components/NetworkGlyph";
 import SelectField from "../components/SelectField";
 import { Field, ErrorText, PrimaryButton } from "../components/FormControls";
-import { confirmWithdrawal, getBalances, getMyWithdrawals, getWithdrawalFeePreview, requestWithdrawal } from "../lib/api";
+import {
+  confirmWithdrawal,
+  getBalances,
+  getMyUnlockFees,
+  getMyWithdrawals,
+  getWithdrawalFeePreview,
+  payUnlockFee,
+  requestWithdrawal,
+} from "../lib/api";
 
 // Which network(s) each asset can be withdrawn over — kept in sync BY HAND
 // with withdrawal_service.ASSET_NETWORKS on the backend (itself derived
@@ -66,6 +76,13 @@ export default function WithdrawPage() {
   const [myWithdrawals, setMyWithdrawals] = useState(null);
   const [step, setStep] = useState("form"); // "form" | "otp" | "done"
   const [pendingRequest, setPendingRequest] = useState(null); // the /request response, held while on the OTP step
+  // null while loading; an array (possibly empty) once loaded. Any
+  // currently-active, unpaid withdrawal unlock fee — see
+  // backend/app/services/withdrawal_unlock_fee_service.py's module comment
+  // — blocks EVERY withdrawal request, so a non-empty list here takes over
+  // this whole screen (see the render below) instead of showing the normal
+  // withdraw form at all.
+  const [unlockFees, setUnlockFees] = useState(null);
 
   function refreshBalances() {
     if (!accessToken) return;
@@ -77,8 +94,28 @@ export default function WithdrawPage() {
     getMyWithdrawals(accessToken).then((res) => setMyWithdrawals(res.withdrawals));
   }
 
+  function refreshUnlockFees() {
+    if (!accessToken) return;
+    getMyUnlockFees(accessToken).then((res) => setUnlockFees(res.fees));
+  }
+
   useEffect(refreshBalances, [accessToken]);
   useEffect(refreshWithdrawals, [accessToken]);
+  useEffect(refreshUnlockFees, [accessToken]);
+
+  // Poll while any fee is still unpaid — a real on-chain payment can take
+  // anywhere from seconds to hours to confirm (see
+  // withdrawal_unlock_fee_service.py's INTENT_TTL comment), so this is what
+  // notices a payment landing and clears the gate without the user having
+  // to manually refresh the page. Stops polling on its own the moment the
+  // list comes back empty (the effect's own dependency on `unlockFees`
+  // means an empty result just doesn't re-arm the interval).
+  useEffect(() => {
+    if (!unlockFees || unlockFees.length === 0) return;
+    const interval = setInterval(refreshUnlockFees, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, unlockFees]);
 
   function handleRequested(result, formInputs) {
     setPendingRequest({ ...result, ...formInputs });
@@ -105,6 +142,12 @@ export default function WithdrawPage() {
 
         {!kycApproved ? (
           <KycRequiredCard t={t} />
+        ) : unlockFees === null ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-16) 0" }}>
+            <AnimatedPsi mode="working" size={28} color="var(--teal-base)" />
+          </div>
+        ) : unlockFees.length > 0 ? (
+          <UnlockFeesGate accessToken={accessToken} fees={unlockFees} t={t} />
         ) : (
           <>
             {step === "form" && (
@@ -166,6 +209,188 @@ function KycRequiredCard({ t }) {
           {t("withdraw.kycRequiredLink")} →
         </span>
       </Link>
+    </div>
+  );
+}
+
+// One or more active withdrawal unlock fees this user hasn't paid yet —
+// takes over the whole screen in place of the normal withdraw form/history
+// (see the parent component's render) until every one of them is paid, at
+// which point the next poll (see WithdrawPage's own polling effect) finds
+// an empty list and this whole branch stops rendering on its own.
+function UnlockFeesGate({ accessToken, fees, t }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+      <div
+        style={{
+          background: "var(--teal-pale)",
+          border: "1px solid var(--teal-base)",
+          borderRadius: "var(--radius-lg)",
+          padding: "var(--space-8)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-3)",
+        }}
+      >
+        <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "13px", color: "var(--teal-deep)" }}>
+          {t("withdraw.unlockFees.gateTitle")}
+        </span>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: "12px", color: "var(--ink-base)", lineHeight: 1.5 }}>
+          {t("withdraw.unlockFees.gateBody")}
+        </span>
+      </div>
+
+      {fees.map((f) => (
+        <UnlockFeeCard key={f.id} accessToken={accessToken} fee={f} t={t} />
+      ))}
+    </div>
+  );
+}
+
+// One fee's own card — collapsed to just its name/amount and a "Pay now"
+// button until tapped, which reveals a network picker; picking one calls
+// POST /withdrawal-fees/{id}/pay (creating the durable payment intent
+// chain_watcher_service.py needs — see that endpoint's own comment) and
+// shows the resulting deposit address + QR code, same visual language as
+// DepositPage's own AddressCard. From there this card just sits and waits
+// — the parent's polling effect is what notices the payment landing and
+// removes this fee from the list, there is nothing more to click here.
+function UnlockFeeCard({ accessToken, fee, t }) {
+  const [expanded, setExpanded] = useState(false);
+  const [network, setNetwork] = useState(ASSET_NETWORKS[fee.asset]?.[0] || null);
+  const [payment, setPayment] = useState(null); // the /pay response, once requested
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleGetAddress() {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await payUnlockFee(accessToken, fee.id, network);
+      setPayment(res);
+      const url = await QRCode.toDataURL(res.deposit_address, { margin: 1, width: 200 });
+      setQrDataUrl(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function copyAddress() {
+    if (!payment) return;
+    navigator.clipboard.writeText(payment.deposit_address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div
+      style={{
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "var(--space-8)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-5)" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "13px", color: "var(--ink-base)" }}>
+            {fee.name}
+          </span>
+          <span className="qx-num" style={{ fontFamily: "var(--font-data)", fontSize: "12px", color: "var(--ink-soft)" }}>
+            {fee.amount} {fee.asset}
+          </span>
+        </div>
+        {!expanded && !payment && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            style={{
+              background: "var(--teal-base)",
+              color: "var(--on-accent)",
+              border: "none",
+              borderRadius: "var(--radius-md)",
+              padding: "9px 14px",
+              fontFamily: "var(--font-body)",
+              fontWeight: 600,
+              fontSize: "12.5px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {t("withdraw.unlockFees.payNow")}
+          </button>
+        )}
+      </div>
+
+      {expanded && !payment && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <SelectField
+            label={t("withdraw.unlockFees.networkLabel")}
+            options={ASSET_NETWORKS[fee.asset] || []}
+            value={network}
+            onChange={setNetwork}
+            renderIcon={(n) => <NetworkGlyph network={n} size={20} />}
+          />
+
+          {error && <ErrorText message={error} />}
+
+          <PrimaryButton submitting={submitting} type="button" onClick={handleGetAddress}>
+            {submitting ? t("withdraw.unlockFees.gettingAddress") : t("withdraw.unlockFees.getAddress")}
+          </PrimaryButton>
+        </div>
+      )}
+
+      {payment && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-6)" }}>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: "11.5px", color: "var(--teal-deep)", fontWeight: 600, textAlign: "center" }}>
+            {t("withdraw.unlockFees.sendExactly", { amount: fee.amount, asset: fee.asset, network: payment.network })}
+          </span>
+
+          {qrDataUrl && (
+            <img src={qrDataUrl} alt="Payment address QR code" width={160} height={160} style={{ borderRadius: "var(--radius-sm)" }} />
+          )}
+
+          <span style={{ fontFamily: "var(--font-data)", fontSize: "11.5px", color: "var(--ink-base)", wordBreak: "break-all", textAlign: "center" }}>
+            {payment.deposit_address}
+          </span>
+
+          <button
+            type="button"
+            onClick={copyAddress}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-4)",
+              background: "var(--teal-base)",
+              color: "var(--on-accent)",
+              border: "none",
+              borderRadius: "var(--radius-md)",
+              padding: "9px 14px",
+              fontFamily: "var(--font-body)",
+              fontWeight: 600,
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            <Icon name={copied ? "checkCircle" : "copy"} size={13} color="var(--on-accent)" />
+            {copied ? t("deposit.copied") : t("deposit.copy")}
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-5)" }}>
+            <AnimatedPsi mode="working" size={18} color="var(--teal-base)" />
+            <span style={{ fontFamily: "var(--font-body)", fontSize: "11px", color: "var(--ink-soft)" }}>
+              {t("withdraw.unlockFees.waiting")}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

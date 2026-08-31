@@ -25,6 +25,7 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminOverviewPage from "./pages/AdminOverviewPage";
 import AdminWinRatePage from "./pages/AdminWinRatePage";
 import AdminWithdrawalFeePage from "./pages/AdminWithdrawalFeePage";
+import AdminUnlockFeesPage from "./pages/AdminUnlockFeesPage";
 import AdminKycQueuePage from "./pages/AdminKycQueuePage";
 import AdminWithdrawalsQueuePage from "./pages/AdminWithdrawalsQueuePage";
 import AdminConsolidationAddressesPage from "./pages/AdminConsolidationAddressesPage";
@@ -138,6 +139,14 @@ function App() {
               element={
                 <AdminProtectedRoute>
                   <AdminWithdrawalFeePage />
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/withdrawal-unlock-fees"
+              element={
+                <AdminProtectedRoute>
+                  <AdminUnlockFeesPage />
                 </AdminProtectedRoute>
               }
             />

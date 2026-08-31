@@ -340,6 +340,72 @@ def set_withdrawal_fee(body: SetWithdrawalFeeRequest, admin: dict = Depends(get_
     )
 
 
+# ── Withdrawal unlock fees ────────────────────────────────────────────────────
+# A completely different mechanic from the flat fee just above (which is
+# auto-deducted from a withdrawal's amount): a named, admin-managed fee that
+# EVERY user must pay, once, as its own separate on-chain payment, before
+# ANY of their withdrawals can be requested — see
+# withdrawal_unlock_fee_service.py's module comment for the full design.
+@router.get("/withdrawal-unlock-fees", response_model=UnlockFeeTypesResponse)
+def list_unlock_fee_types(admin: dict = Depends(get_current_admin)):
+    return UnlockFeeTypesResponse(fee_types=[UnlockFeeType(**f) for f in withdrawal_unlock_fee_service.list_fee_types()])
+
+
+@router.post("/withdrawal-unlock-fees", response_model=UnlockFeeType)
+def create_unlock_fee_type(body: CreateUnlockFeeTypeRequest, admin: dict = Depends(get_current_admin)):
+    if not body.name.strip():
+        raise HTTPException(status_code=400, detail="A name is required")
+    try:
+        amount = Decimal(body.amount)
+    except InvalidOperation:
+        raise HTTPException(status_code=400, detail="amount must be a valid decimal string")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be greater than 0")
+    # A fee below the platform's own minimum-deposit floor could never
+    # actually be detected on-chain — the chain scanner drops any transfer
+    # below MIN_DEPOSIT_USD before a payment even has a chance to be
+    # matched against an open intent (see chain_watcher_service.py's
+    # _scan_tron/_scan_evm). Refusing it here, at creation time, is far
+    # better than an admin discovering it as "nobody's payment is ever
+    # detected" days later.
+    if amount < chain_watcher_service.MIN_DEPOSIT_USD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"amount must be at least {chain_watcher_service.MIN_DEPOSIT_USD} — anything smaller can never be detected as a real on-chain payment",
+        )
+
+    try:
+        fee_type = withdrawal_unlock_fee_service.create_fee_type(body.name.strip(), body.asset, amount, admin["id"])
+    except withdrawal_unlock_fee_service.UnknownAsset as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    log_admin_action(
+        admin_id=admin["id"],
+        action="WITHDRAWAL_UNLOCK_FEE_TYPE_CREATED",
+        target_type="withdrawal_unlock_fee_types",
+        target_id=fee_type["id"],
+        metadata={"name": fee_type["name"], "asset": fee_type["asset"], "amount": fee_type["amount"]},
+    )
+    return UnlockFeeType(**fee_type)
+
+
+@router.put("/withdrawal-unlock-fees/{fee_type_id}/active", response_model=UnlockFeeType)
+def set_unlock_fee_type_active(
+    fee_type_id: str, body: SetUnlockFeeTypeActiveRequest, admin: dict = Depends(get_current_admin)
+):
+    fee_type = withdrawal_unlock_fee_service.set_fee_type_active(fee_type_id, body.is_active)
+    if fee_type is None:
+        raise HTTPException(status_code=404, detail="Fee type not found")
+
+    log_admin_action(
+        admin_id=admin["id"],
+        action="WITHDRAWAL_UNLOCK_FEE_TYPE_ACTIVATED" if body.is_active else "WITHDRAWAL_UNLOCK_FEE_TYPE_DEACTIVATED",
+        target_type="withdrawal_unlock_fee_types",
+        target_id=fee_type_id,
+    )
+    return UnlockFeeType(**fee_type)
+
+
 # ── Withdrawal approval queue (Phase 4, module 2) ────────────────────────────
 # Every withdrawal, regardless of amount, needs manual sign-off here before
 # a cent of it moves — see withdrawal_service.py's module comment for

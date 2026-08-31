@@ -153,6 +153,8 @@ export default function HomePage() {
         <LeaderboardSection t={t} />
 
         <NewsSection markets={markets} t={t} />
+
+        <DiscoverSection t={t} />
       </div>
     </div>
   );
@@ -1460,6 +1462,157 @@ function MarketFeedRow({ ticker }) {
         </DeltaChip>
       </div>
     </div>
+  );
+}
+
+// Bybit's home screen has a "Discover" row of educational article cards
+// near the bottom of the feed — this is that, adapted to Quantex. Unlike
+// Leaderboard/News (which are PREVIEW-tagged stand-ins for a system that
+// doesn't exist yet), this one is genuinely finished: there's no article/
+// CMS system anywhere in this app's architecture doc, so there's nothing
+// to "wire up later" here — it's a small fixed pool of real external
+// articles, same treatment as AdsCarousel's photo pool below.
+//
+// Every article is a real, verified Binance Academy URL (checked by hand,
+// not guessed) chosen to match something this specific app actually does:
+// the three bot strategies Quantex offers (Grid, DCA, momentum), spot-only
+// trading (no leverage, matching this platform), wallet security (relevant
+// right where deposit/withdraw live), and stablecoins (everything here is
+// priced in USDT). `title`/`body` below are this app's own short summary
+// of each article, not copied text from Binance Academy.
+//
+// To add or swap an article: add a row here (or edit one) with a `url`,
+// an `icon` name from Icon.jsx, a short `tag`/`title`/`body`, done — no
+// other file needs to change. To resize the whole row, add/remove rows;
+// there's no daily-rotation logic here the way AdsCarousel has (its 30-ad
+// pool needed that to avoid repetition — a 7-card static row doesn't).
+const DISCOVER_ARTICLES = [
+  {
+    tag: "BOTS",
+    icon: "bots",
+    title: "How trading bots actually work",
+    body: "A quick primer on what a bot does and why traders automate their strategy instead of trading by hand.",
+    url: "https://academy.binance.com/en/articles/your-guide-to-binance-trading-bots",
+  },
+  {
+    tag: "GRID",
+    icon: "bots",
+    title: "Grid trading, step by step",
+    body: "The strategy behind Quantex's Grid bots — buying dips and selling rallies automatically inside a price range.",
+    url: "https://academy.binance.com/en/articles/step-by-step-guide-to-grid-trading-on-binance-futures",
+  },
+  {
+    tag: "DCA",
+    icon: "dollar",
+    title: "What is dollar-cost averaging?",
+    body: "The idea behind Quantex's DCA bots — investing a fixed amount on a schedule instead of trying to time the market.",
+    url: "https://academy.binance.com/en/articles/dollar-cost-averaging-dca-explained",
+  },
+  {
+    tag: "MOMENTUM",
+    icon: "markets",
+    title: "Reading market momentum",
+    body: "How momentum traders spot when a move is just getting started — and when it's already running out of steam.",
+    url: "https://academy.binance.com/en/glossary/market-momentum",
+  },
+  {
+    tag: "SPOT",
+    icon: "trade",
+    title: "Spot trading, the basics",
+    body: "No leverage, no liquidations — just buying and selling what you actually own, the way every trade on Quantex works.",
+    url: "https://academy.binance.com/en/articles/what-is-a-spot-market-and-how-to-do-spot-trading",
+  },
+  {
+    tag: "SECURITY",
+    icon: "shield",
+    title: "Keep your holdings secure",
+    body: "Five habits that meaningfully lower your risk of losing crypto to a hack, a scam, or a leaked seed phrase.",
+    url: "https://academy.binance.com/en/articles/5-tips-to-secure-your-cryptocurrency-holdings",
+  },
+  {
+    tag: "STABLECOINS",
+    icon: "dollar",
+    title: "Why everything here is priced in USDT",
+    body: "What a stablecoin actually is, and why it's the base currency behind almost every trade on this platform.",
+    url: "https://academy.binance.com/en/articles/what-is-a-stablecoin",
+  },
+];
+
+function DiscoverSection({ t }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <SectionHeader title={t("home.discover.title")} />
+      <div
+        className="qx-hide-scrollbar"
+        style={{
+          display: "flex",
+          gap: "var(--space-5)",
+          overflowX: "auto",
+          // No scroll-snap here (unlike AdsCarousel) — these cards are
+          // meant to read as a loose, keep-scrolling row of articles you
+          // browse past, not a one-slide-at-a-time carousel with dots.
+          WebkitOverflowScrolling: "touch",
+          // Bleeds past the page's own 20px side padding so the row's
+          // last partial card hints "there's more" right at the edge of
+          // the screen, the same peeking-card treatment Bybit uses for
+          // this exact row.
+          margin: "0 -20px",
+          padding: "0 20px",
+        }}
+      >
+        {DISCOVER_ARTICLES.map((article) => (
+          <DiscoverCard key={article.url} article={article} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// One article card — external link (opens Binance Academy in a new tab so
+// the user's Quantex session/scroll position isn't lost), duotone icon
+// tile matching QuickTile's exact look further up this page for a
+// consistent icon language across the screen.
+function DiscoverCard({ article }) {
+  return (
+    <a
+      href={article.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        flex: "0 0 156px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-4)",
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "14px",
+        textDecoration: "none",
+      }}
+    >
+      <div
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: "var(--radius-md)",
+          background: "var(--teal-pale)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Icon name={article.icon} size={18} color="var(--teal-base)" />
+      </div>
+      <span style={{ fontFamily: "var(--font-data)", fontSize: "9px", letterSpacing: "0.05em", color: "var(--teal-base)" }}>
+        {article.tag}
+      </span>
+      <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "12.5px", color: "var(--ink-base)", lineHeight: 1.3 }}>
+        {article.title}
+      </span>
+      <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--ink-soft)", lineHeight: 1.4 }}>
+        {article.body}
+      </span>
+    </a>
   );
 }
 

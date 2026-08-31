@@ -327,6 +327,25 @@ export function getWithdrawalFeePreview(accessToken) {
   });
 }
 
+// ── Withdrawal unlock fees — a separate mechanic from the flat fee above:
+// a named, admin-managed fee EVERY user must pay once, as its own separate
+// on-chain payment, before ANY withdrawal can be requested. See
+// backend/app/services/withdrawal_unlock_fee_service.py's module comment
+// for the full design. ───────────────────────────────────────────────────
+export function getMyUnlockFees(accessToken) {
+  return request("/withdrawal-fees/mine", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function payUnlockFee(accessToken, feeTypeId, network) {
+  return request(`/withdrawal-fees/${feeTypeId}/pay`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ network }),
+  });
+}
+
 // ── Notifications (the bell icon) — see backend/app/services/
 // notification_service.py's module docstring for the full list of events
 // that write a row here (KYC decisions, withdrawal decisions, deposit
@@ -404,6 +423,32 @@ export function setWithdrawalFee(adminToken, feeAmount) {
     method: "PUT",
     headers: { Authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({ fee_amount: feeAmount }),
+  });
+}
+
+// ── Withdrawal unlock fees (admin) — see getMyUnlockFees/payUnlockFee
+// above for the user-facing half of this same feature. ────────────────────
+export function getUnlockFeeTypes(adminToken) {
+  return request("/admin/withdrawal-unlock-fees", {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+}
+
+export function createUnlockFeeType(adminToken, { name, asset, amount }) {
+  // amount stays a decimal STRING all the way to the backend, same
+  // reasoning as every other money-bearing value passed through this file.
+  return request("/admin/withdrawal-unlock-fees", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ name, asset, amount }),
+  });
+}
+
+export function setUnlockFeeTypeActive(adminToken, feeTypeId, isActive) {
+  return request(`/admin/withdrawal-unlock-fees/${feeTypeId}/active`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ is_active: isActive }),
   });
 }
 

@@ -117,6 +117,16 @@ const resources = {
         statusCompleted: 'Completed',
         statusFailed: 'Failed',
         statusRejected: 'Rejected',
+        unlockFees: {
+          gateTitle: 'One-time payment required',
+          gateBody: "Before you can withdraw, you need to pay the following one-time fee(s) — each is a separate payment, not deducted from your balance.",
+          payNow: 'Pay now',
+          networkLabel: 'Network',
+          getAddress: 'Get payment address',
+          gettingAddress: 'Loading…',
+          sendExactly: 'Send exactly {{amount}} {{asset}} on {{network}} to this address',
+          waiting: "Waiting for your payment — this can take a few minutes. You don't need to stay on this page.",
+        },
       },
       kyc: {
         title: 'Identity verification',
@@ -140,6 +150,21 @@ const resources = {
         rejectedBody: 'Your last submission was rejected:',
         rejectedRetry: 'You can submit new documents below.',
         submittedAt: 'Submitted {{date}}',
+        // Copy for KycPhotoGuide.jsx's two guidance cards (shown above the
+        // ID and selfie upload fields). documentTitle/Tip* apply to BOTH
+        // the ID-front and ID-back fields, since the framing rules are the
+        // same for either side of the document.
+        guide: {
+          documentTitle: 'How to photograph your ID',
+          documentTip1: 'Lay it flat on a plain surface, all 4 corners visible',
+          documentTip2: 'Make sure the text and photo are sharp and readable',
+          selfieTitle: 'How to take your selfie',
+          selfieTip1: 'Face the camera in good, even lighting',
+          selfieTip2: 'No sunglasses, hats, or filters — just your face',
+          avoidGlare: 'Glare',
+          avoidBlur: 'Blurry',
+          avoidCropped: 'Cut off',
+        },
       },
       bots: {
         title: 'Bots',
@@ -210,6 +235,7 @@ const resources = {
           kyc: 'KYC queue',
           withdrawals: 'Withdrawals',
           withdrawalFee: 'Withdrawal fee',
+          unlockFees: 'Unlock fees',
           consolidation: 'Consolidation addresses',
           sweeps: 'Sweeps',
         },
@@ -260,6 +286,20 @@ const resources = {
           submit: 'Save',
           saving: 'Saving…',
           saved: 'Saved — this now applies to every new withdrawal request.',
+        },
+        unlockFees: {
+          title: 'Unlock fees',
+          logout: 'Log out',
+          intro: 'A named fee here must be paid once by every user — as its own separate on-chain payment — before any of their withdrawals can be requested, for as long as it stays active. Deactivating one stops requiring it for new payers without affecting anyone who already paid.',
+          empty: 'No unlock fees created yet.',
+          active: 'Active',
+          inactive: 'Inactive',
+          createTitle: 'Create a new fee',
+          nameLabel: 'Name',
+          assetLabel: 'Asset',
+          amountLabel: 'Amount',
+          create: 'Create fee',
+          creating: 'Creating…',
         },
         kyc: {
           title: 'KYC queue',
@@ -502,6 +542,9 @@ const resources = {
           // two strings only — no other tab-related copy lives elsewhere.
           hotsTab: 'Hots',
           spotsTab: 'Spots',
+        },
+        discover: {
+          title: 'Discover',
         },
         verifyEmail: {
           body: 'Verify your email to unlock deposits.',

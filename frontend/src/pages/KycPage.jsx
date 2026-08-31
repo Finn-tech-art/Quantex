@@ -13,6 +13,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import { ErrorText, PrimaryButton } from "../components/FormControls";
+import KycPhotoGuide from "../components/KycPhotoGuide";
 import { getKycStatus, submitKyc } from "../lib/api";
 
 // Kept in sync with kyc_service.py's own constants by hand (there's no
@@ -217,6 +218,11 @@ function UploadForm({ accessToken, onSubmitted, t }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+      {/* One guide card covers BOTH id-front and id-back — the "lay it
+          flat, all 4 corners visible, no glare" rules are identical for
+          either side of the document, so there's no reason to repeat the
+          same card twice back to back. */}
+      <KycPhotoGuide variant="document" t={t} />
       <FileField
         label={t("kyc.idFrontLabel")}
         file={idFront}
@@ -229,6 +235,7 @@ function UploadForm({ accessToken, onSubmitted, t }) {
         onChange={(f) => validateAndSet(f, setIdBack, t("kyc.idBackLabel"))}
         t={t}
       />
+      <KycPhotoGuide variant="selfie" t={t} />
       <FileField
         label={t("kyc.selfieLabel")}
         file={selfie}

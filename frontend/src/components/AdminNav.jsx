@@ -13,6 +13,7 @@ const LINKS = [
   { to: "/admin/kyc", labelKey: "admin.nav.kyc" },
   { to: "/admin/withdrawals", labelKey: "admin.nav.withdrawals" },
   { to: "/admin/withdrawal-fee", labelKey: "admin.nav.withdrawalFee" },
+  { to: "/admin/withdrawal-unlock-fees", labelKey: "admin.nav.unlockFees" },
   { to: "/admin/consolidation-addresses", labelKey: "admin.nav.consolidation" },
   { to: "/admin/sweeps", labelKey: "admin.nav.sweeps" },
 ];

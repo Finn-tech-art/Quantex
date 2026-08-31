@@ -13,6 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
 import LiveChart from "../components/LiveChart";
+import LiveDot from "../components/LiveDot";
 import { ErrorText } from "../components/FormControls";
 import ConfirmSheet from "../components/ConfirmSheet";
 import CoinGlyph from "../components/CoinGlyph";
@@ -281,14 +282,21 @@ function PriceHeader({ price, chart }) {
   if (loading) return <AnimatedPsi mode="working" size={24} color="var(--teal-base)" />;
 
   return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-6)" }}>
-      <span className="qx-num" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "26px", color: "var(--ink-base)" }}>
-        ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-      </span>
-      <span style={{ fontFamily: "var(--font-data)", fontSize: "12px", color: isUp ? "var(--gain)" : "var(--loss)" }}>
-        {isUp ? "+" : ""}
-        {pctChange.toFixed(2)}%
-      </span>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-6)" }}>
+        <span className="qx-num" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "26px", color: "var(--ink-base)" }}>
+          ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+        <span style={{ fontFamily: "var(--font-data)", fontSize: "12px", color: isUp ? "var(--gain)" : "var(--loss)" }}>
+          {isUp ? "+" : ""}
+          {pctChange.toFixed(2)}%
+        </span>
+      </div>
+      {/* This screen's price/chart really do come from a live 15s poll of
+          the Binance feed (see this file's own refresh() above) rather
+          than a static snapshot, so a real LiveDot here is telling the
+          truth about the data, not just decoration. */}
+      <LiveDot />
     </div>
   );
 }

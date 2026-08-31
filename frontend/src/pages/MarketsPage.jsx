@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
+import LiveDot from "../components/LiveDot";
 import { getMarkets } from "../lib/api";
 
 // How often the list re-fetches from the backend. 15s matches the poll
@@ -70,9 +71,16 @@ export default function MarketsPage() {
   return (
     <div style={{ paddingTop: "var(--space-11)" }}>
       <div style={{ maxWidth: 384, margin: "0 auto", padding: "0 20px", display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
-        <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "18px", color: "var(--ink-base)" }}>
-          {t("markets.title")}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "18px", color: "var(--ink-base)" }}>
+            {t("markets.title")}
+          </span>
+          {/* Only shown once a real list has actually loaded — while
+              tickers is still null (first load) or loadError is set, there
+              is no live feed successfully flowing yet, so claiming "LIVE"
+              here would be lying about the state of the screen. */}
+          {tickers !== null && !loadError && <LiveDot />}
+        </div>
 
         <SearchBox value={search} onChange={setSearch} placeholder={t("markets.searchPlaceholder")} />
 

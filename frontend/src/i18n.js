@@ -536,6 +536,11 @@ const resources = {
         news: {
           title: 'News',
           preview: 'PREVIEW',
+          // {{time}} is a relative label like "2h ago" (NEWS_TIME_LABELS in
+          // HomePage.jsx), {{source}} is either a real news organization's
+          // name or "Quantex" itself for the platform's own product-update
+          // articles — see NewsCard/NEWS_POOL in HomePage.jsx.
+          publishedMeta: 'Published {{time}} · {{source}}',
           // Tab labels for the Hots/Spots widget beside News — see
           // NewsSection/FeedTabs in HomePage.jsx. Both are fed by real
           // getMarkets() data (unlike News' sample items), so change these

@@ -1222,12 +1222,39 @@ const NEWS_ARTICLES = [
   },
 ];
 
-// Adds a photo to each article above by cycling through NEWS_IMAGES —
-// article i gets NEWS_IMAGES[i % NEWS_IMAGES.length], so with 45 images
-// and 60 articles the last 15 articles simply reuse an earlier photo.
+// Real crypto/finance news organizations — cycled onto every article below
+// by index, the same way NEWS_IMAGES cycles a photo onto each one. Chosen
+// deliberately as actual, currently-publishing outlets (matching what was
+// asked: attribution should read as something a real person could go look
+// up), not invented placeholder names, since a byline is only meaningful
+// if it names someone who could plausibly have written the piece.
+const NEWS_SOURCES = [
+  "CoinDesk",
+  "Cointelegraph",
+  "The Block",
+  "Decrypt",
+  "Bloomberg",
+  "Reuters",
+  "Blockworks",
+  "CryptoSlate",
+  "The Defiant",
+  "DL News",
+];
+
+// Adds a photo and a "published by" source to each article above.
+// image: cycles through NEWS_IMAGES — article i gets
+// NEWS_IMAGES[i % NEWS_IMAGES.length], so with 45 images and 60 articles
+// the last 15 articles simply reuse an earlier photo.
+// source: every PRODUCT-tagged article (see NEWS_ARTICLES above) is a
+// Quantex changelog entry, not third-party journalism — no real outlet
+// would publish "Grid bots now support tighter range configurations", so
+// those are attributed to "Quantex" itself rather than a news org. Every
+// other article cycles through NEWS_SOURCES by index, same mechanism as
+// the image cycling right above it.
 const NEWS_POOL = NEWS_ARTICLES.map((article, i) => ({
   ...article,
   image: NEWS_IMAGES[i % NEWS_IMAGES.length],
+  source: article.tag === "PRODUCT" ? "Quantex" : NEWS_SOURCES[i % NEWS_SOURCES.length],
 }));
 
 // How many of NEWS_POOL's 60 articles show up in a given day's News tab.
@@ -1292,7 +1319,12 @@ function NewsSection({ markets, t }) {
             // per-article timestamp would drift out of sync with reality
             // fast; generating "how long ago" from the card's position in
             // today's already-newest-first list always looks current.
-            <NewsCard key={item.title} article={item} timeLabel={NEWS_TIME_LABELS[i] ?? NEWS_TIME_LABELS[NEWS_TIME_LABELS.length - 1]} />
+            <NewsCard
+              key={item.title}
+              article={item}
+              timeLabel={NEWS_TIME_LABELS[i] ?? NEWS_TIME_LABELS[NEWS_TIME_LABELS.length - 1]}
+              t={t}
+            />
           ))}
         </div>
       )}
@@ -1313,14 +1345,20 @@ function NewsSection({ markets, t }) {
 }
 
 // One row inside the News tab — Bybit's own news list uses this same
-// shape: a square thumbnail next to a tag/headline/timestamp stack,
-// collapsed by default. There's no article-reader page in this app (this
-// is decorative preview content, not a real news feed), so rather than
+// shape: a square thumbnail next to a tag/headline/byline stack, collapsed
+// by default. There's no article-reader page in this app (this is
+// decorative preview content, not a real news feed), so rather than
 // building out a whole new route just to show ~150 words of fake copy,
 // tapping the row expands it in place to reveal the full body — same
 // idea as a Bybit list row navigating to a full article, adapted to not
 // need a second screen.
-function NewsCard({ article, timeLabel }) {
+//
+// The byline ("Published {time} · {source}") reads article.source, which
+// NEWS_POOL above already resolved per-article — either a real news
+// organization's name, or "Quantex" itself for the platform's own
+// PRODUCT-tagged changelog entries. See NEWS_POOL's comment for exactly
+// how that's decided; nothing here needs to know the difference.
+function NewsCard({ article, timeLabel, t }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -1359,7 +1397,9 @@ function NewsCard({ article, timeLabel }) {
           <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "12.5px", color: "var(--ink-base)" }}>
             {article.title}
           </span>
-          <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>{timeLabel}</span>
+          <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>
+            {t("home.news.publishedMeta", { time: timeLabel, source: article.source })}
+          </span>
         </div>
       </div>
 

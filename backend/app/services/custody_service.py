@@ -273,7 +273,20 @@ def _estimate_transfer_energy(from_address: str, to_address: str, raw_amount: in
 
 
 _ENERGY_ORDER_POLL_SECONDS = 2
-_ENERGY_ORDER_MAX_ATTEMPTS = 15  # ~30s of polling — this codebase's first real order settled in ~3s
+_ENERGY_ORDER_MAX_ATTEMPTS = 15  # ~30s of polling — real orders seen so far settle in 3-6s
+
+# Every GetBlock order status observed live so far that means "not done
+# yet, keep polling" — NOT the full set GetBlock's API is documented to
+# use (their docs don't actually enumerate one). Found by real production
+# failures, not by reading documentation: "accepted" first, then "pending"
+# a little later, before settling into "charged" (success) — see
+# _poll_energy_order's docstring for the incident each one caused. If a
+# future order ever settles into some other never-seen-before status,
+# _poll_energy_order will (correctly) treat it as terminal and let
+# _rent_energy's own "not == charged" check decide whether that's a real
+# failure — but if that new status turns out to ALSO just be "not done
+# yet," add it here rather than everyone re-learning this the expensive way.
+_TRANSIENT_ORDER_STATUSES = {"accepted", "pending"}
 
 
 def _poll_energy_order(order_id: str) -> dict:
@@ -286,10 +299,24 @@ def _poll_energy_order(order_id: str) -> dict:
     empty txid/price_usd, settling into status=="charged" — their actual
     terminal-success value, never "success" — moments later once payment
     and delegation both complete. Treating that first "accepted" response
-    as an outright failure was the exact bug this function fixes: it
+    as an outright failure was the exact first bug this function fixes: it
     aborted a sweep whose Energy had, in fact, already been rented and
     charged for, wasting that real charge since the sweep never got to use
     the Energy it had just paid for.
+
+    A SECOND, related bug found live in production shortly after: the order
+    lifecycle isn't just accepted -> charged, there's at least one more
+    transient state in between — status=="pending" — which the original
+    version of this function treated as terminal (anything not "accepted"
+    was returned immediately, including "pending"), causing the exact same
+    real-charge-wasted failure mode all over again. Confirmed directly
+    against a real order: created at 20:18:02Z with status "pending" moments
+    later, settled to "charged" at 20:18:08Z — just 6 seconds later, well
+    within reach of a slightly more patient poll. Both "accepted" and
+    "pending" are now treated as "keep polling," not just "accepted" — if
+    GetBlock's real API ever surfaces yet another transient status name,
+    the safest fix is adding it to _TRANSIENT_ORDER_STATUSES below, not
+    trying to enumerate every known-safe terminal one.
     """
     for _ in range(_ENERGY_ORDER_MAX_ATTEMPTS):
         resp = httpx.get(
@@ -299,10 +326,12 @@ def _poll_energy_order(order_id: str) -> dict:
         )
         resp.raise_for_status()
         data = resp.json().get("data", {})
-        if data.get("status") != "accepted":
+        if data.get("status") not in _TRANSIENT_ORDER_STATUSES:
             return data
         time.sleep(_ENERGY_ORDER_POLL_SECONDS)
-    raise EnergyRentalFailed(f"GetBlock order {order_id} did not settle within the poll window — still 'accepted'")
+    raise EnergyRentalFailed(
+        f"GetBlock order {order_id} did not settle within the poll window — still {data.get('status')!r}"
+    )
 
 
 def _rent_energy(deposit_address: str, energy_amount: int) -> dict:

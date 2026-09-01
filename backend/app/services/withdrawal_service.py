@@ -34,16 +34,25 @@
 # confirmed.
 
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.services import custody_service, notification_service, withdrawal_fee_service, withdrawal_unlock_fee_service
+from app.services import (
+    custody_service,
+    email_service,
+    notification_service,
+    withdrawal_fee_service,
+    withdrawal_unlock_fee_service,
+)
 from app.services.auth_service import kyc_status_code
 from app.services.network_assets import NETWORK_CONFIG
 from app.services.otp_service import generate_and_send_otp, verify_otp
 from app.services.redis_client import get_redis
 from app.services.supabase_client import get_supabase
+
+logger = logging.getLogger(__name__)
 
 # purpose string for the generic OTP service (otp_service.py) — matches the
 # exact name the architecture doc uses for this ("withdrawal_confirmation").
@@ -127,6 +136,25 @@ def _load_networks() -> None:
         raise RuntimeError("Lookup table 'networks' returned no rows")
     _network_id_cache.update({r["code"]: r["id"] for r in rows})
     _network_code_cache.update({r["id"]: r["code"] for r in rows})
+
+
+_network_name_cache: dict[str, str] = {}
+
+
+def _network_name(code: str) -> str:
+    """Human label for a network code (e.g. "Tron (TRC-20)" for "TRC20"),
+    read from the `networks` table's own `name` column — used only by the
+    withdrawal-approved email below, same reasoning and same duplication-
+    over-cross-module-import choice as chain_watcher_service's identical
+    helper for the deposit-confirmed email (that one is private to its own
+    module, so this is its own small copy rather than reaching into another
+    service's internals)."""
+    if code not in _network_name_cache:
+        rows = get_supabase().table("networks").select("code,name").execute().data
+        if not rows:
+            raise RuntimeError("Lookup table 'networks' returned no rows")
+        _network_name_cache.update({r["code"]: r["name"] for r in rows})
+    return _network_name_cache[code]
 
 
 def _load_statuses() -> None:
@@ -525,6 +553,42 @@ def get_admin_detail(withdrawal_id: str) -> dict | None:
     }
 
 
+def _send_withdrawal_approved_email(
+    user_id: str, asset_code: str, network_code: str, destination_address: str, amount: Decimal, fee_amount: Decimal
+) -> None:
+    """Best-effort, exactly like notification_service.create_notification's
+    own "never raise" contract (and chain_watcher_service's identical
+    _send_deposit_confirmed_email helper for the deposit side) — by the time
+    this runs, both ledger entries have already committed for real inside
+    approve_withdrawal, so a failure here (Resend down, a bad email on file,
+    a lookup error) must only ever mean the user doesn't get an email, never
+    a rolled-back or duplicated debit. Caught and logged here, once, so
+    approve_withdrawal's caller doesn't need its own try/except."""
+    try:
+        user_row = get_supabase().table("users").select("email").eq("id", user_id).limit(1).execute().data
+        if not user_row:
+            logger.warning("No user row found for %s — skipping withdrawal-approved email", user_id)
+            return
+        to_email = user_row[0]["email"]
+        net_amount = amount - fee_amount
+
+        email_service.send_email_sync(
+            to=to_email,
+            subject=f"Withdrawal approved: {net_amount} {asset_code}",
+            html=email_service.render_withdrawal_approved_email(
+                amount=str(amount),
+                asset_code=asset_code,
+                network_name=_network_name(network_code),
+                destination_address=destination_address,
+                fee_amount=str(fee_amount),
+                net_amount=str(net_amount),
+                approved_at=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send withdrawal-approved email (user=%s)", user_id)
+
+
 def approve_withdrawal(withdrawal_id: str, admin_id: str) -> bool:
     """Returns False if this withdrawal doesn't exist or is no longer
     PENDING (already decided, or being decided by a second admin request
@@ -635,10 +699,24 @@ def approve_withdrawal(withdrawal_id: str, admin_id: str) -> bool:
     # entries having already landed for real by this point regardless of
     # whether this notification succeeds.
     _load_assets()
+    _load_networks()
     notification_service.create_notification(
         row["user_id"], "WITHDRAWAL_APPROVED",
         "Withdrawal approved",
         f"Your withdrawal of {net_amount} {_asset_code_cache[row['asset_id']]} was approved.",
+    )
+
+    # Same best-effort, never-raise reasoning as the notification just
+    # above — see _send_withdrawal_approved_email's own docstring. This is
+    # the actual "your withdrawal succeeded" email the user reads; the bell
+    # notification above is just the in-app echo of the same event.
+    _send_withdrawal_approved_email(
+        row["user_id"],
+        _asset_code_cache[row["asset_id"]],
+        _network_code_cache[row["network_id"]],
+        row["destination_address"],
+        amount,
+        fee_amount,
     )
 
     return True

@@ -1,16 +1,18 @@
 # Reads/writes the free-tier session limits added in migration
 # 017_free_tier_session_limits.sql — a single per-user knob
-# (users.daily_session_limit) that gates two separate things for a simulated
-# bot:
-#   1. Session LENGTH at creation time — a user still on the default limit
-#      can only pick a session_length_minutes <= FREE_TIER_MAX_SESSION_
-#      LENGTH_MINUTES (see is_free_tier() and simulated_bot_service.
-#      create_simulated_bot, which calls it).
-#   2. Session COUNT per UTC day — a user can only START (generate a fresh
-#      win/loss result for) up to daily_session_limit sessions per day,
-#      counted across every bot they own, not per bot — see
-#      sessions_started_today()/record_session_started() and
-#      simulated_bot_engine._start_new_session, which calls both.
+# (users.daily_session_limit) that gates two separate things, BOTH enforced
+# in simulated_bot_service.create_simulated_bot (not in the engine — a
+# simulated bot runs exactly one session and then caps, see that file's
+# MAX_SESSIONS comment, so "configure a new bot" and "start another session"
+# are the same user action):
+#   1. Session LENGTH — a user still on the default limit can only pick a
+#      session_length_minutes <= FREE_TIER_MAX_SESSION_LENGTH_MINUTES (see
+#      is_free_tier()).
+#   2. Configuration COUNT per UTC day — a user can only successfully create
+#      up to daily_session_limit bots per day, counted across every bot they
+#      own, not per bot (a per-bot count would be meaningless anyway once
+#      each bot only ever runs once) — see sessions_started_today()/
+#      record_session_started().
 # An admin raises daily_session_limit above DEFAULT_DAILY_SESSION_LIMIT (via
 # the /admin/session-limits endpoints in routers/admin.py) to lift BOTH
 # rules for that user at once — there is deliberately no separate flag for
@@ -114,20 +116,19 @@ def sessions_started_today(user_id: str) -> int:
 
 
 def has_session_budget_today(user_id: str, daily_session_limit: int) -> bool:
-    """Checked BEFORE generate_fake_trading_result() runs for a new session
-    (see simulated_bot_engine._start_new_session) — so a user who's already
-    used up today's budget never has a session generated for them at all,
-    not just blocked from having it recorded afterward."""
+    """Checked BEFORE a new bot is created (see simulated_bot_service.
+    create_simulated_bot) — so a user who's already used up today's budget
+    is rejected at the configuration step itself, with a clear error,
+    rather than a bot getting created and then never actually running."""
     return sessions_started_today(user_id) < daily_session_limit
 
 
 def record_session_started(user_id: str) -> int:
     """Atomically bumps today's count for user_id and returns the new total —
-    called once a session has actually been saved as the bot's new
-    pending_session (i.e. AFTER simulated_bot_service.start_pending_session
-    returns True), never speculatively before that, so a session that lost
-    the Stop-click race (see that function's own docstring) never consumes a
-    slot from the day's budget for nothing."""
+    called once a new bot has actually, successfully been created (see
+    simulated_bot_service.create_simulated_bot), never speculatively before
+    that, so a request that fails for an unrelated reason never costs the
+    user a slot for a bot that doesn't exist."""
     result = get_supabase().rpc(
         "increment_daily_session_count",
         {"p_user_id": user_id, "p_session_date": today_utc().isoformat()},

@@ -9,10 +9,14 @@
 --      threshold and the "what counts as free-tier" comparison both belong
 --      in Python, next to fake_trading_service's own SESSION_LENGTH_FULL_
 --      SCALE_MINUTES=30, not duplicated into SQL).
---   2. A user can only START (not just create) up to daily_session_limit
---      sessions per UTC calendar day, counted across every bot they own —
---      enforced app-side in simulated_bot_engine._start_new_session, backed
---      by the counting table below.
+--   2. A user can only successfully CREATE up to daily_session_limit
+--      simulated bots per UTC calendar day, counted across every bot they
+--      own — enforced app-side in simulated_bot_service.create_simulated_bot,
+--      backed by the counting table below. A simulated bot runs exactly one
+--      session and then caps (MAX_SESSIONS=1 in that same file), so
+--      configuring a new bot is how a user starts another session once their
+--      last one's length has elapsed — that configuration step is what's
+--      actually rate-limited, not automatic recurrence within one bot.
 -- An admin raises daily_session_limit for a specific user (via the new
 -- /admin/session-limits endpoints) to lift BOTH rules for them at once —
 -- there's deliberately no separate flag for "exempt from the length cap

@@ -66,6 +66,15 @@ const ASSET_NETWORKS = {
 const MIN_WITHDRAWAL_AMOUNT = 100;
 const BALANCE_FLOOR = 20;
 
+// Every status a withdrawal is done changing on its own — nothing in this
+// codebase ever moves a row out of one of these once it lands there (see
+// withdrawal_service.py's module docstring on why APPROVED is, in practice,
+// the real end state today: there's no broadcast worker yet to carry it on
+// to BROADCAST/COMPLETED). Used only to decide whether the polling effect
+// below still has anything worth watching — PENDING is the only status
+// reachable in the running app that ISN'T in this set.
+const TERMINAL_WITHDRAWAL_STATUSES = new Set(["APPROVED", "COMPLETED", "FAILED", "REJECTED"]);
+
 const STATUS_COLOR = {
   PENDING: "var(--pending-dot)",
   APPROVED: "var(--gain)",
@@ -122,6 +131,23 @@ export default function WithdrawPage() {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, unlockFees]);
+
+  // Same reasoning as the unlock-fees poll just above: an admin approving or
+  // rejecting a request (see withdrawal_service.approve_withdrawal /
+  // reject_withdrawal) happens from a completely separate admin session, so
+  // nothing pushes that change to this tab on its own. Without this, "Your
+  // withdrawal requests" below would keep showing PROCESSING until the user
+  // manually reloads the page, even though the request was already decided.
+  // Stops on its own once every request this user has is in a terminal
+  // state — no open request left to watch, no reason to keep polling.
+  useEffect(() => {
+    if (!myWithdrawals) return;
+    const hasOpenRequest = myWithdrawals.some((w) => !TERMINAL_WITHDRAWAL_STATUSES.has(w.status));
+    if (!hasOpenRequest) return;
+    const interval = setInterval(refreshWithdrawals, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, myWithdrawals]);
 
   function handleRequested(result, formInputs) {
     setPendingRequest({ ...result, ...formInputs });

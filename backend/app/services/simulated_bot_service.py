@@ -89,16 +89,19 @@ DEFAULT_INTERVAL_SECONDS = 15 * 60  # one scripted session every 15 minutes
 # short sessions ever produce a $0.00 result again.
 MIN_SESSION_LENGTH_MINUTES = 5
 
-# Was a hard "runs exactly one session ever" cap — raised to effectively
-# unbounded now that free-tier users have a real, ongoing limiter instead
-# (session_limit_service's daily-session-count check, enforced in
-# simulated_bot_engine._start_new_session before a new session is even
-# generated). A bot now keeps recurring — one session every interval_seconds
-# — for as long as its owner has budget left today; is_capped below simply
-# never fires in practice at this value, but the mechanism is left in place
-# rather than deleted, in case a real per-bot lifetime cap is wanted again
-# later (just lower this back down if so).
-MAX_SESSIONS = 1_000_000
+# A simulated bot runs exactly one session and then stops (status flips to
+# SESSION_CAPPED, an existing bot_statuses row that already meant exactly
+# this). This is deliberate, not a placeholder to raise later: the "3
+# sessions a day" free-tier limit is enforced by capping how many TIMES a
+# user can create/configure a bot per day (see session_limit_service's
+# has_session_budget_today/record_session_started, both called from
+# create_simulated_bot below), not by letting one bot keep recurring on its
+# own — a session ending is what sends the user back to the creation form to
+# configure a new one, which is the step that's actually rate-limited. Raise
+# this (or remove the cap entirely, letting next_session_due_at keep
+# recurring forever) only if that product decision changes and a single bot
+# should be allowed to run multiple sessions unattended again.
+MAX_SESSIONS = 1
 
 
 def build_initial_simulated_config(session_length_minutes: int) -> dict:
@@ -159,9 +162,8 @@ def create_simulated_bot(
         raise ValueError(f"session_length_minutes must be >= {MIN_SESSION_LENGTH_MINUTES}")
 
     # Free-tier length cap — see session_limit_service's module comment for
-    # why this and the daily-session-count cap (enforced separately, in
-    # simulated_bot_engine._start_new_session) are both driven by the same
-    # users.daily_session_limit column.
+    # why this and the daily-configuration-count cap right below it are both
+    # driven by the same users.daily_session_limit column.
     daily_session_limit = session_limit_service.get_daily_session_limit(user_id)
     if (
         session_limit_service.is_free_tier(daily_session_limit)
@@ -172,9 +174,22 @@ def create_simulated_bot(
             "for a free-tier account"
         )
 
+    # Free-tier daily cap — checked HERE, at creation/configuration time, not
+    # in simulated_bot_engine.py. Since MAX_SESSIONS above is 1, "create a
+    # bot" and "start its one and only session" are effectively the same
+    # event from the user's side — configuring a new bot IS how a user
+    # starts another session once their last one's length has elapsed and
+    # the previous bot capped. So this is the one and only place that needs
+    # to gate the count; the engine doesn't need its own check.
+    if not session_limit_service.has_session_budget_today(user_id, daily_session_limit):
+        raise ValueError(
+            f"You've already configured {daily_session_limit} bot session(s) today — "
+            "try again tomorrow, or ask an admin to raise your daily limit"
+        )
+
     config = build_initial_simulated_config(session_length_minutes)
 
-    return bot_service.create_bot(
+    bot_id = bot_service.create_bot(
         user_id=user_id,
         strategy_type_code="GRID",  # see migration 007's comment on why this stays GRID
         pair=pair,
@@ -185,6 +200,11 @@ def create_simulated_bot(
         is_paper=False,
         is_simulated=True,
     )
+    # Only consumed once the bot has actually, successfully been created —
+    # an unrelated failure inside bot_service.create_bot above (a DB error,
+    # say) must never cost the user a slot for a bot that doesn't exist.
+    session_limit_service.record_session_started(user_id)
+    return bot_id
 
 
 def build_pending_session(fake_result: dict) -> dict:

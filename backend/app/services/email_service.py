@@ -272,3 +272,92 @@ def render_deposit_confirmed_email(
       </div>
     </div>
     """
+
+
+def render_withdrawal_approved_email(
+    amount: str,
+    asset_code: str,
+    network_name: str,
+    destination_address: str,
+    fee_amount: str,
+    net_amount: str,
+    approved_at: str,
+) -> str:
+    """Builds the full HTML body for the "your withdrawal was approved" email
+    — sent from withdrawal_service.approve_withdrawal the moment an admin
+    approves a request (never for PENDING or REJECTED — see that function's
+    own comment for why REJECTED gets only an in-app notification, no
+    email). Same shared header/footer/color-token structure as
+    render_deposit_confirmed_email above, just with the details this
+    direction of money movement actually needs: where it's going and what
+    was deducted, rather than a transaction hash to look up (there's no
+    broadcast worker yet to produce one — see withdrawal_service.py's module
+    docstring).
+
+    amount / asset_code: the amount the user originally requested, before
+        the fee below is taken out — e.g. "100.000000" / "USDT".
+    network_name: human label (e.g. "Tron (TRC-20)"), read from the
+        `networks` table the same way render_deposit_confirmed_email's
+        caller does, so it can never drift from what the rest of the app
+        calls each network.
+    destination_address: shown in full (not truncated) — same convention
+        render_otp_email's withdrawal-confirmation details table already
+        uses, so a user can double check it against what they typed.
+    fee_amount / net_amount: already-computed strings — this function does
+        no arithmetic itself.
+    approved_at: already-formatted string (e.g. "2026-09-01 13:22 UTC").
+    """
+    TEAL_BASE = "#0E6B62"
+    INK_BASE = "#211D16"
+    INK_SOFT = "#6B6152"
+    CREAM_DEEP = "#EEE6D3"
+    CREAM_LINE = "#E0D5BE"
+
+    details = [
+        ("Amount requested", f"{amount} {asset_code}"),
+        ("Network", network_name),
+        ("Destination", destination_address),
+        ("Fee", f"{fee_amount} {asset_code}"),
+        ("Net amount sent", f"{net_amount} {asset_code}"),
+        ("Approved at", approved_at),
+    ]
+    detail_rows = "".join(
+        f"""
+        <tr>
+          <td style="padding: 8px 0; color: {INK_SOFT}; font-size: 13px;">{_escape(label)}</td>
+          <td style="padding: 8px 0; color: {INK_BASE}; font-size: 13px; font-weight: 600; text-align: right;">{_escape(value)}</td>
+        </tr>
+        """
+        for label, value in details
+    )
+
+    return f"""
+    <div style="font-family: 'Space Grotesk', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom: 28px;">
+        <tr>
+          <td style="padding-right: 10px;">
+            <img src="{LOGO_URL}" alt="Quantex" width="28" height="28" style="display: block;" />
+          </td>
+          <td style="font-size: 18px; font-weight: 700; color: {TEAL_BASE};">Quantex</td>
+        </tr>
+      </table>
+
+      <h2 style="font-size: 18px; color: {INK_BASE}; margin: 0 0 8px;">Withdrawal approved</h2>
+      <p style="font-size: 14px; color: {INK_SOFT}; margin: 0 0 4px;">Your withdrawal request has been approved and sent:</p>
+
+      <p style="font-size: 36px; font-weight: 700; color: {TEAL_BASE}; margin: 12px 0;">-{_escape(net_amount)} {_escape(asset_code)}</p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="background: {CREAM_DEEP}; border: 1px solid {CREAM_LINE}; border-radius: 12px; padding: 4px 16px; margin: 20px 0;">
+        {detail_rows}
+      </table>
+
+      <p style="font-size: 13px; color: {INK_SOFT}; margin: 20px 0 0;">
+        If you weren't expecting this, please reach out so we can look into it.
+      </p>
+
+      <div style="border-top: 1px solid {CREAM_LINE}; margin-top: 28px; padding-top: 16px;">
+        <p style="font-size: 11px; color: {INK_SOFT}; margin: 0;">Quantex &middot; This is an automated message, please don't reply to it.</p>
+      </div>
+    </div>
+    """

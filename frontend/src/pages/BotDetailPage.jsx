@@ -247,7 +247,7 @@ function Header({ pair, detail, t }) {
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, display: "inline-block" }} />
             <span style={{ fontFamily: "var(--font-data)", fontSize: "9px", color: "var(--ink-soft)" }}>
               {detail.strategy_type} {detail.is_paper ? `· ${t("bots.paper")}` : ""}
-              {detail.is_simulated ? "· Simulated " : ""}· {detail.status}
+              · {detail.status}
             </span>
           </div>
         </div>
@@ -521,7 +521,7 @@ function NextSessionNotice({ dueAt }) {
       }}
     >
       <span style={{ fontFamily: "var(--font-body)", fontSize: "11.5px", color: "var(--ink-soft)" }}>
-        Next scripted session
+        Next session
       </span>
       <span style={{ fontFamily: "var(--font-data)", fontSize: "11.5px", color: "var(--teal-base)", fontWeight: 600 }}>
         {remainingSeconds > 0 ? `${m}:${String(s).padStart(2, "0")}` : "any moment now"}

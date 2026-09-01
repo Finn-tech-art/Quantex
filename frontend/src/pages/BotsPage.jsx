@@ -155,7 +155,6 @@ function BotRow({ bot }) {
         <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "12.5px", color: "var(--ink-base)" }}>
           {bot.pair} · {bot.strategy_type}
           {bot.is_paper ? ` · ${t("bots.paper")}` : ""}
-          {bot.is_simulated ? " · Simulated" : ""}
         </span>
         <span style={{ fontFamily: "var(--font-data)", fontSize: "9.5px", color: "var(--ink-soft)" }}>
           {bot.status}

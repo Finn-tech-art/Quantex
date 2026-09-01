@@ -29,13 +29,12 @@
 // `var(--...)` token, never a hardcoded hex, per this project's own
 // design-system rule.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import AdminNav from "../components/AdminNav";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
-import { useEffect, useRef } from "react";
 import { getAdminOverview } from "../lib/api";
 
 // The pills under the combined chart — "all" always shows the FULL `daily`

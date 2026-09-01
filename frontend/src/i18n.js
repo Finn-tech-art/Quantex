@@ -202,7 +202,7 @@ const resources = {
         },
         demo: {
           pageTitle: 'Demo Session',
-          eyebrow: 'SIMULATED SESSION',
+          eyebrow: 'DEMO SESSION',
           runSession: 'Run new session',
           running: 'Running…',
           winBadge: 'WIN',
@@ -217,8 +217,8 @@ const resources = {
         },
         create: {
           title: 'Create bot',
-          cardTitle: 'New simulated bot',
-          cardBody: 'Runs scripted trading sessions on a schedule — wins and losses move your real USDT balance, per the win rate an admin sets for each day.',
+          cardTitle: 'New Grid bot',
+          cardBody: 'Runs trading sessions on a schedule — wins and losses move your real USDT balance, per the win rate an admin sets for each day.',
           pairLabel: 'Pair',
           gridModeLabel: 'Grid mode',
           gridModeArithmetic: 'Arithmetic',
@@ -289,12 +289,12 @@ const resources = {
           defaultBadge: 'DEFAULT — not set by an admin yet',
           setBadge: 'SET BY ADMIN',
           winRateLabel: 'Win rate (0–1)',
-          winRateHint: '0.90 means 90% of scripted sessions on this date come out a win.',
+          winRateHint: '0.90 means 90% of sessions on this date come out a win.',
           targetReturnLabel: 'Target min return (0–1)',
           targetReturnHint: '0.40 means a winning session returns at least 40%.',
           submit: 'Save for today',
           saving: 'Saving…',
-          saved: 'Saved — this is now live for every simulated bot session today.',
+          saved: 'Saved — this is now live for every bot session today.',
         },
         withdrawalFee: {
           title: 'Withdrawal fee',
@@ -593,7 +593,7 @@ const resources = {
       trade: {
         title: 'Trade',
         pairLabel: 'Pair',
-        simulatedNotice: 'Simulated execution — real balance. Trades never touch a real exchange, but every buy or sell moves your real USDT and asset balances at the live market price, including a {{feePct}} fee.',
+        simulatedNotice: 'Matched execution — real balance. Every buy or sell moves your real USDT and asset balances at the live market price, including a {{feePct}} fee.',
         buy: 'Buy',
         sell: 'Sell',
         amountLabel: 'Amount to spend (USDT)',

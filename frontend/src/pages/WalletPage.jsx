@@ -190,7 +190,29 @@ function KycStrip({ kycStatus, t }) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-5)" }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, display: "inline-block" }} />
+        {/* Same 28px icon-chip pattern NotificationBell.jsx already uses
+            for its own KYC row (circle background + centered Icon, tinted
+            by status color) — swapped in here for the plain colored dot
+            this used to be, so the strip reads as "identity verification"
+            at a glance instead of just an unlabeled status light. `shield`
+            is the same glyph already used for KYC everywhere else in the
+            app (NotificationBell's KYC_APPROVED entry, MenuPage's KYC
+            item), so this doesn't introduce a new icon-to-meaning mapping
+            — just brings this one screen in line with the other two. */}
+        <div
+          style={{
+            width: 22,
+            height: 22,
+            flexShrink: 0,
+            borderRadius: "var(--radius-full)",
+            background: "var(--cream-line)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Icon name="shield" size={12} color={dotColor} />
+        </div>
         <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "12.5px", color: "var(--ink-base)" }}>
           {t("wallet.kycPrefix")} {kycStatus || "…"}
         </span>

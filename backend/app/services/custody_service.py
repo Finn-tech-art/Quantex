@@ -23,6 +23,7 @@ from decimal import Decimal
 from eth_account import Account
 from eth_account.messages import encode_typed_data
 from tronpy import Tron
+from tronpy.exceptions import AddressNotFound
 from tronpy.keys import PrivateKey, is_base58check_address
 from tronpy.providers import HTTPProvider
 from web3 import Web3
@@ -268,6 +269,64 @@ def stake_gas_wallet(trx_amount: Decimal) -> str:
     return txn.txid
 
 
+# How much TRX to send a deposit address the very first time it's ever
+# swept — ONLY when Tron's own native account registry has no record of it
+# yet (see _ensure_account_activated below). This is separate from, and on
+# top of, the ~1 TRX network fee Tron charges the SENDER (not the
+# recipient) to create a brand-new account (getCreateNewAccountFeeInSystem
+# Contract — checked live against TronGrid's own chain parameters, not
+# assumed, given real gas-wallet TRX pays for this). The deposit address
+# itself doesn't actually need this TRX for anything — Energy is delegated
+# to it separately for the sweep, and every activated Tron account gets a
+# small free daily bandwidth allowance, plenty for one transfer — so this
+# is deliberately minimal, just enough to trigger account creation, not a
+# working balance. Raise this only if evidence ever shows the free daily
+# bandwidth allowance isn't enough on its own.
+TRON_ACCOUNT_ACTIVATION_TRX = Decimal("0.1")
+
+
+def _ensure_account_activated(deposit_address: str) -> None:
+    """Tron keeps two separate notions of "does this address exist": a
+    TRC-20 token contract's own internal balance mapping (where a deposit
+    address can hold a real, spendable USDT balance without ever appearing
+    here), and Tron's native account registry (which DelegateResourceContract
+    — the Energy delegation _delegate_energy performs right before every
+    sweep — requires the TARGET account to already be present in). A
+    deposit address that has only ever received USDT, never any native TRX,
+    has no native account record at all, so delegating Energy to it fails
+    outright with "Account not exists" — found live, the hard way, on this
+    codebase's very first real mainnet sweep attempt, since every deposit
+    address is designed to start at zero TRX.
+
+    Sending a deposit address ANY native TRX transfer is exactly what
+    creates its Tron account record, so this just does that — a safe no-op
+    (does nothing, costs nothing) if the account already exists (e.g. a
+    returning user's second-ever deposit), via client.get_account() raising
+    tronpy's AddressNotFound only for a genuinely untouched address. Safe to
+    call unconditionally at the start of every sweep rather than needing a
+    separate "is this a first sweep" flag anywhere.
+    """
+    client = _tron_client()
+
+    try:
+        client.get_account(deposit_address)
+        return  # already activated — nothing to do
+    except AddressNotFound:
+        pass
+
+    key = _gas_wallet_key()
+    owner = key.public_key.to_base58check_address()
+    amount_sun = int(TRON_ACCOUNT_ACTIVATION_TRX * 1_000_000)
+
+    txn = client.trx.transfer(owner, deposit_address, amount_sun).build().sign(key)
+    txn.broadcast()
+    logger.info(
+        "Activated previously-untouched Tron account %s (sent %s TRX from gas wallet, tx=%s)",
+        deposit_address, TRON_ACCOUNT_ACTIVATION_TRX, txn.txid,
+    )
+    _wait_for_confirmation(client, txn.txid)
+
+
 def _delegate_energy(deposit_address: str) -> str:
     """Delegates TRON_ENERGY_DELEGATION_TRX worth of Energy from the gas
     wallet to a deposit address, just before sweeping it. Whatever tronpy
@@ -396,6 +455,12 @@ def sweep_tron_usdt_deposit(wallet_row: dict) -> dict:
     sweep_id = sweep_row["id"]
 
     try:
+        # Must happen before delegation — see _ensure_account_activated's
+        # docstring for why a never-before-touched deposit address (every
+        # address, the first time it's ever swept) makes delegation fail
+        # outright otherwise. A no-op for a returning address.
+        _ensure_account_activated(deposit_address)
+
         resource_tx = _delegate_energy(deposit_address)
         get_supabase().table("sweeps").update({"resource_tx_hash": resource_tx}).eq("id", sweep_id).execute()
 

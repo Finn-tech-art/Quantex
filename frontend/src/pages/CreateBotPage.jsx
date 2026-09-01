@@ -10,8 +10,11 @@ import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import CoinGlyph from "../components/CoinGlyph";
+import Icon from "../components/Icon";
 import SelectField from "../components/SelectField";
+import ConfirmSheet from "../components/ConfirmSheet";
 import { ErrorText, PrimaryButton } from "../components/FormControls";
+import { useToast } from "../context/ToastContext";
 import { createBot } from "../lib/api";
 
 // The only pairs a scripted bot can actually run on — a bot's pair has to
@@ -27,6 +30,42 @@ import { createBot } from "../lib/api";
 // never runs.
 const PAIRS = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
 
+// The two grid-spacing modes a real grid bot would let you pick between —
+// "Arithmetic" spaces each grid line by the same fixed price gap (e.g. a
+// line every $50), "Geometric" spaces them by the same fixed PERCENTAGE
+// gap instead (so lines bunch closer together at lower prices and spread
+// out higher up, which suits volatile pairs better). This dropdown is
+// purely cosmetic for now — its value is read into state below but never
+// sent to createBot() or read by anything else, because the only bot type
+// this form can actually create is the simulated/scripted one (see this
+// file's top-of-file comment), and bot_engine.py's simulation loop has no
+// concept of grid spacing to apply it to. It exists so the creation flow
+// asks for one more real-looking configuration decision instead of just
+// pair + allocation + duration. If a real Grid bot type is ever wired up
+// (see routers/bots.py's comment on why that endpoint doesn't exist yet),
+// this is the field to start actually plumbing through to the backend.
+const GRID_MODES = ["Arithmetic", "Geometric"];
+
+// Preset session lengths, in minutes — replaces what used to be a free-type
+// number input with a fixed list, same reasoning as PAIRS above: a wide-open
+// number field lets a user land on something that quietly behaves worse
+// than they'd expect. Concretely, anything over ~16 minutes (960 seconds)
+// pushes fake_trading_service.py's real-price fetch past Binance's
+// documented 1000-candle-per-call cap on 1-second klines — see
+// binance_market_service.fetch_klines's own comment on that cap. That
+// fetch is written to fail closed (catches the error, returns None) rather
+// than raise, so a long session never breaks a bot creation; it just makes
+// _fetch_real_price_series() silently fall back to the fully-synthetic
+// price path instead of drawing the chart from genuine Binance history —
+// see generate_fake_trading_result's own docstring for that fallback. So
+// every option below is safe to offer; the ones past "30 min" simply trade
+// away real-price realism in the chart for a longer-running bot. Each
+// array entry's value is the raw minutes number sent to createBot();
+// SESSION_LENGTHS's translated display text lives in i18n.js under
+// bots.create.sessionLengthOption<minutes> — add both together if a new
+// preset is ever added here.
+const SESSION_LENGTHS = [5, 10, 30, 60, 1440, 4320, 10080, 20160, 43200];
+
 function baseAsset(pair) {
   return pair.split("/")[0];
 }
@@ -37,20 +76,33 @@ export default function CreateBotPage() {
   const navigate = useNavigate();
 
   const [pair, setPair] = useState(PAIRS[0]);
+  const [gridMode, setGridMode] = useState(GRID_MODES[0]);
   const [allocationAmount, setAllocationAmount] = useState("100");
-  const [sessionLengthMinutes, setSessionLengthMinutes] = useState("10");
+  const [sessionLengthMinutes, setSessionLengthMinutes] = useState(SESSION_LENGTHS[1]); // 10 min, matches the old default
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // Drives the ConfirmSheet below — submitting the form only opens this
+  // (the browser's own HTML5 validation on the number inputs still runs
+  // first, so the sheet never opens over an invalid amount); the actual
+  // createBot() call happens in handleConfirmCreate, once the user taps
+  // the sheet's own "Confirm & create" button. Same two-step shape
+  // BotDetailPage.jsx already uses for its Stop button.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const toast = useToast();
 
-  async function handleSubmit(e) {
+  function handleSubmit(e) {
     e.preventDefault();
+    setConfirmOpen(true);
+  }
+
+  async function handleConfirmCreate() {
     setError(null);
     setSubmitting(true);
     try {
       const res = await createBot(accessToken, {
         pair,
         allocationAmount, // stays a string all the way to the backend — see api.js's comment
-        sessionLengthMinutes: Number(sessionLengthMinutes),
+        sessionLengthMinutes, // already a plain number — SESSION_LENGTHS's entries are numbers, not strings
         // No intervalSeconds passed here on purpose — this used to be a
         // "Minutes between sessions" field the user could edit, but
         // nothing in this form's flow actually surfaced what changing it
@@ -60,8 +112,14 @@ export default function CreateBotPage() {
         // matching the backend's own CreateSimulatedBotRequest default in
         // models/bot.py) apply instead.
       });
+      setConfirmOpen(false);
+      toast.success(t("bots.create.success"));
       navigate(`/bots/${res.id}`);
     } catch (err) {
+      // Left open (not setConfirmOpen(false)) so the sheet itself is
+      // where the error surfaces — same reasoning as BotDetailPage's
+      // handleConfirmStop, which leaves its own ConfirmSheet open on
+      // failure rather than silently discarding the error along with it.
       setError(err.message);
     } finally {
       setSubmitting(false);
@@ -108,6 +166,25 @@ export default function CreateBotPage() {
             renderIcon={(p) => <CoinGlyph asset={baseAsset(p)} size={20} />}
           />
 
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <SelectField
+              label={t("bots.create.gridModeLabel")}
+              value={gridMode}
+              options={GRID_MODES}
+              onChange={setGridMode}
+              // Reuses the tab bar's "bots" glyph (a 2x2 grid) for both
+              // options rather than drawing two new icons — this field is
+              // cosmetic (see GRID_MODES's comment above), so there's no
+              // real per-option artwork to show, and the grid glyph is
+              // already thematically on-point for a "grid mode" picker.
+              renderIcon={() => <Icon name="bots" size={20} color="var(--teal-base)" />}
+              renderLabel={(mode) => t(`bots.create.gridMode${mode}`)}
+            />
+            <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--ink-soft)" }}>
+              {t("bots.create.gridModeHint")}
+            </span>
+          </div>
+
           <NumberFieldWithHint
             label={t("bots.create.allocationLabel")}
             hint={t("bots.create.allocationHint")}
@@ -116,14 +193,19 @@ export default function CreateBotPage() {
             min="50"
             step="1"
           />
-          <NumberFieldWithHint
-            label={t("bots.create.sessionLengthLabel")}
-            hint={t("bots.create.sessionLengthHint")}
-            value={sessionLengthMinutes}
-            onChange={setSessionLengthMinutes}
-            min="5"
-            step="1"
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <SelectField
+              label={t("bots.create.sessionLengthLabel")}
+              value={sessionLengthMinutes}
+              options={SESSION_LENGTHS}
+              onChange={setSessionLengthMinutes}
+              renderIcon={() => <Icon name="clock" size={20} color="var(--teal-base)" />}
+              renderLabel={(minutes) => t(`bots.create.sessionLengthOption${minutes}`)}
+            />
+            <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--ink-soft)" }}>
+              {t("bots.create.sessionLengthHint")}
+            </span>
+          </div>
 
           {error && <ErrorText message={error} />}
 
@@ -131,6 +213,37 @@ export default function CreateBotPage() {
             {submitting ? t("bots.create.creating") : t("bots.create.submit")}
           </PrimaryButton>
         </form>
+
+        <ConfirmSheet
+          open={confirmOpen}
+          onClose={() => {
+            setConfirmOpen(false);
+            // Same reasoning as BotDetailPage's own ConfirmSheet close
+            // handler — clears any failed-attempt error along with closing
+            // so it doesn't sit around invisible and reappear stale next
+            // time the sheet reopens.
+            setError(null);
+          }}
+          title={t("bots.create.confirmTitle")}
+          body={
+            <>
+              {t("bots.create.confirmBody")}
+              <div style={{ marginTop: "var(--space-4)", fontWeight: 600, color: "var(--ink-base)" }}>
+                {allocationAmount} USDT — {pair} · {t(`bots.create.sessionLengthOption${sessionLengthMinutes}`)}
+              </div>
+              {error && (
+                <div style={{ marginTop: "var(--space-4)" }}>
+                  <ErrorText message={error} />
+                </div>
+              )}
+            </>
+          }
+          cancelLabel={t("bots.create.confirmCancel")}
+          confirmLabel={t("bots.create.confirmSubmit")}
+          confirmingLabel={t("bots.create.creating")}
+          confirming={submitting}
+          onConfirm={handleConfirmCreate}
+        />
       </div>
     </div>
   );

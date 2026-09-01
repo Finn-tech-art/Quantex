@@ -383,6 +383,20 @@ const ICONS = {
     ),
   },
 
+  // A circled clock face (ring + two hands pointing to a fixed time) —
+  // used by CreateBotPage.jsx's session-length picker, where a coin/network
+  // logo (CoinGlyph/NetworkGlyph) makes no sense per-option since every
+  // option there is a plain duration, not an asset. Only an outline
+  // variant exists; nothing renders this filled.
+  clock: {
+    outline: (color) => (
+      <>
+        <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.7" fill="none" />
+        <path d="M12 7v5.2l3.3 1.9" stroke={color} strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+  },
+
   // Plain X — used as the "clear this input" glyph inside MarketsPage.jsx's
   // search box once it has text typed into it. Only an outline variant
   // exists; nothing renders this filled.

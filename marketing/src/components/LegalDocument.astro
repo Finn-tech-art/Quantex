@@ -53,6 +53,20 @@ const { title, pdfPath, effectiveDate } = Astro.props;
     font-weight: 600;
   }
   .qx-legal-embed {
+    /* <object> defaults to display: inline in every browser's UA
+       stylesheet, and Chromium (and likely other engines) will drop this
+       element's ENTIRE styled box -- the white background, border,
+       rounded corners, height/min-height sizing, all of it -- the moment
+       the PDF fails to load and it falls back to rendering just the
+       plain-text <p> inside. Without this line, that fallback paragraph
+       ends up floating alone in a big stretch of plain page background
+       with no visible box around it at all, which reads as a huge,
+       broken-looking gap rather than the "PDF didn't load, here's a
+       link" card it's supposed to be. Forcing display: block keeps the
+       box (and its background/border) painting correctly in the
+       fallback case, matching how it already looked when the PDF DOES
+       render inline. */
+    display: block;
     width: 100%;
     /* Tall enough to read a full page of the PDF without scrolling twice
        (once in the embed, once on the page) on most laptop screens. */
@@ -78,6 +92,15 @@ const { title, pdfPath, effectiveDate } = Astro.props;
          a short embed plus the two "open as PDF" links above/inside it is
          more useful than a tall box that may just render blank. */
       height: 50vh;
+      /* The desktop min-height (500px) was still winning over this 50vh
+         on phones -- min-height always overrides a smaller height, so
+         the box stayed pinned at 500px regardless of this rule. That's
+         most of a phone screen spent on a card that, when the fallback
+         above kicks in, holds four lines of text and nothing else.
+         Shrink the floor here so the fallback card stays reasonably
+         sized; raise this back up if a real inline PDF ever needs more
+         room on mobile. */
+      min-height: 320px;
     }
   }
   @media (max-width: 480px) {

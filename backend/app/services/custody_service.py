@@ -522,6 +522,24 @@ def sweep_tron_usdt_deposit(wallet_row: dict) -> dict:
         return {"status": "failed", "sweep_id": sweep_id, "tx_hash": txn.txid}
 
     except Exception as exc:
+        # Best-effort reclaim of any Energy that was successfully delegated
+        # earlier in THIS attempt before it failed at a later step — a real
+        # gap found live: a sweep that fails after _delegate_energy succeeds
+        # but before the sweep completes used to leave that delegation
+        # permanently outstanding, since _undelegate_energy was previously
+        # only ever called on the success path above — silently eating into
+        # the gas wallet's available FreezeEnergyV2 balance with every such
+        # failure, until a LATER, unrelated sweep attempt fails with
+        # "delegateBalance must be less than or equal to available
+        # FreezeEnergyV2 balance" and nothing about that error points back
+        # at the real cause. Safe to call unconditionally here even when
+        # delegation never actually happened in this attempt (e.g. a
+        # failure before _delegate_energy was ever reached) —
+        # _undelegate_energy already swallows its own failures internally,
+        # so an undelegate for an amount that was never delegated just fails
+        # quietly inside that function, never raising here.
+        _undelegate_energy(deposit_address)
+
         get_supabase().table("sweeps").update(
             {"status_id": _sweep_status_id("FAILED"), "error_message": str(exc)}
         ).eq("id", sweep_id).execute()

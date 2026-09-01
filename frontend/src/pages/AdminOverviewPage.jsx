@@ -537,9 +537,6 @@ function CombinedChart({ data, t }) {
   function xCenter(i) {
     return COMBO_PADDING.left + i * slotWidth + slotWidth / 2;
   }
-  function ySignups(v) {
-    return COMBO_PADDING.top + COMBO_PLOT_H - (v / maxSignups) * COMBO_PLOT_H;
-  }
   function yDeposits(v) {
     return COMBO_PADDING.top + COMBO_PLOT_H - (v / maxDeposits) * COMBO_PLOT_H;
   }

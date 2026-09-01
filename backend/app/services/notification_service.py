@@ -117,20 +117,31 @@ def list_for_user(user_id: str, limit: int = DEFAULT_LIST_LIMIT) -> list[dict]:
 
 
 def unread_count(user_id: str) -> int:
-    # count="exact" + head=True asks Postgres for just the row count, not
-    # the rows themselves — this is the supabase-py idiom for a cheap
-    # COUNT(*) that never has to transfer or deserialize any actual data,
-    # which matters here since the bell polls this on every refresh (see
-    # NotificationBell.jsx's POLL_MS).
-    result = (
+    # NOTE: this used to ask Postgres for just the row count via
+    # count="exact", head=True (the idiomatic supabase-py way to get a
+    # cheap COUNT(*) with no row data transferred) instead of fetching the
+    # actual matching rows below. That was the actual bug behind the bell's
+    # badge never appearing: verified live against this project's own
+    # Supabase instance that head=True's result.count comes back 0 no
+    # matter how many rows actually match — this postgrest-py/supabase-py
+    # version's sync client doesn't parse the Content-Range header a HEAD
+    # response relies on, so .count silently stays None (coerced to 0 by
+    # the `or 0` that used to be here) even when unread rows genuinely
+    # exist. Fetching the matching rows' ids and taking len() is the
+    # workaround: proven correct against live data, at the cost of
+    # transferring a handful of uuids per poll instead of zero — a cost
+    # that's irrelevant at this table's scale (one small app's own
+    # notifications, not a high-traffic multi-tenant table).
+    rows = (
         get_supabase()
         .table("notifications")
-        .select("id", count="exact", head=True)
+        .select("id")
         .eq("user_id", user_id)
         .eq("is_read", False)
         .execute()
+        .data
     )
-    return result.count or 0
+    return len(rows)
 
 
 def mark_read(notification_id: str, user_id: str) -> dict | None:

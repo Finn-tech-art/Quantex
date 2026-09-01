@@ -15,6 +15,7 @@ import TradePage from "./pages/TradePage";
 import MenuPage from "./pages/MenuPage";
 import DepositPage from "./pages/DepositPage";
 import WithdrawPage from "./pages/WithdrawPage";
+import ConvertPage from "./pages/ConvertPage";
 import WalletPage from "./pages/WalletPage";
 import BotsPage from "./pages/BotsPage";
 import BotDetailPage from "./pages/BotDetailPage";
@@ -24,6 +25,7 @@ import KycPage from "./pages/KycPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminOverviewPage from "./pages/AdminOverviewPage";
 import AdminWinRatePage from "./pages/AdminWinRatePage";
+import AdminSessionLimitsPage from "./pages/AdminSessionLimitsPage";
 import AdminWithdrawalFeePage from "./pages/AdminWithdrawalFeePage";
 import AdminUnlockFeesPage from "./pages/AdminUnlockFeesPage";
 import AdminKycQueuePage from "./pages/AdminKycQueuePage";
@@ -78,6 +80,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <WithdrawPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/convert"
+              element={
+                <ProtectedRoute>
+                  <ConvertPage />
                 </ProtectedRoute>
               }
             />
@@ -140,6 +150,14 @@ function App() {
               element={
                 <AdminProtectedRoute>
                   <AdminWinRatePage />
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/session-limits"
+              element={
+                <AdminProtectedRoute>
+                  <AdminSessionLimitsPage />
                 </AdminProtectedRoute>
               }
             />

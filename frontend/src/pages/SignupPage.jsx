@@ -44,7 +44,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-5">
+    <div className="flex min-h-screen items-center justify-center px-5 py-8">
       <div
         className="w-full max-w-sm"
         style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}

@@ -16,13 +16,14 @@
 //   - getMarkets()           -> the Hots/Spots tabs inside the News widget
 //                              (see backend/app/routers/market.py) — same
 //                              feed MarketsPage.jsx's full list uses
-// Leaderboard has no real data source yet (no trader-ranking system) —
-// per the design discussion for this screen, it renders clearly
-// PREVIEW-tagged sample content rather than being cut, so the full screen
-// composition is visible now and can be wired to a real source later
-// without a layout change. The News tab (inside the News/Hots/Spots widget
-// below Leaderboard) is the same situation — no news feed exists yet — but
-// Hots and Spots, its two sibling tabs, are both real live data.
+// Leaderboard has no real data source yet (no trader-ranking system) — it
+// renders a simulated "top traders this week" pool instead of being cut,
+// so the full screen composition is visible now and can be wired to a
+// real source later without a layout change; see pickWeeklyLeaderboard's
+// comment for how that simulation works. The News tab (inside the
+// News/Hots/Spots widget below Leaderboard) is the same situation — no
+// news feed exists yet — but Hots and Spots, its two sibling tabs, are
+// both real live data.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -126,7 +127,7 @@ export default function HomePage() {
   const firstName = (user.email || "").split("@")[0];
 
   return (
-    <div style={{ paddingTop: "var(--space-11)" }}>
+    <div style={{ paddingTop: "var(--space-11)", paddingBottom: "var(--space-16)" }}>
       <div style={{ maxWidth: 384, margin: "0 auto", padding: "0 20px", display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
         <TopRow greeting={t("home.greeting", { name: firstName })} />
 
@@ -390,6 +391,7 @@ function QuickActions({ t }) {
       <QuickTile to="/deposit" icon="deposit" label={t("home.quickActions.deposit")} />
       <QuickTile to="/withdraw" icon="withdraw" label={t("home.quickActions.withdraw")} />
       <QuickTile to="/bots/create" icon="newBot" label={t("home.quickActions.newBot")} />
+      <QuickTile to="/convert" icon="convert" label={t("home.quickActions.convert")} />
     </div>
   );
 }
@@ -537,23 +539,51 @@ function hashStringToSeed(str) {
   return hash;
 }
 
-// Picks `count` rows out of `pool`, reseeded by the device's local
-// calendar date so every visit on the same day gets the same picks in
-// the same order, and the set changes again the next day. (Using local
-// date components rather than an ISO/UTC date specifically so "today"
-// matches what the viewer's own clock says, not UTC's.) A Fisher-Yates
+// Local (device-clock) calendar date, as "YYYY-M-D" — deliberately local
+// components rather than an ISO/UTC date so "today" matches what the
+// viewer's own clock says, not UTC's.
+function getLocalDateKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+}
+
+// Local calendar week, as "YYYY-Www" (ISO-8601 week numbering). Same
+// local-clock reasoning as getLocalDateKey above, just bucketed by week
+// instead of by day — used by the Leaderboard's "top traders THIS WEEK"
+// framing, which should hold steady for the whole week rather than
+// reshuffling daily like the ads carousel and news feed do.
+function getLocalWeekKey() {
+  const now = new Date();
+  // Copy at UTC midnight for this local date so the ISO week math below
+  // (which operates on UTC internally) isn't thrown off by the local
+  // timezone offset shifting the date near midnight.
+  const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  // ISO weeks start on Monday; getUTCDay() is 0=Sunday..6=Saturday, so
+  // this maps Monday->0 .. Sunday->6 before shifting to the Thursday of
+  // the same week — the ISO standard says a week "belongs to" whichever
+  // year contains that week's Thursday, which is what makes the
+  // week-number math below correct at year boundaries.
+  const dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const weekNum = 1 + Math.round(((date - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${date.getUTCFullYear()}-W${weekNum}`;
+}
+
+// Picks `count` rows out of `pool`, reseeded by `periodKey` (a day key
+// from getLocalDateKey, or a week key from getLocalWeekKey) so every
+// visit within the same period gets the same picks in the same order,
+// and the set changes again once the period rolls over. A Fisher-Yates
 // shuffle driven by the seeded RNG, keeping only the first `count`
 // entries, is a standard unbiased way to pick a random subset without
-// repeats. `salt` is mixed into the seed so two different pools picked
-// on the same day (the ads carousel and the news feed both use this)
-// don't end up shuffled in lockstep with each other. NOTE: if the app is
-// left open across midnight, this won't re-pick mid-session — it's only
-// recomputed on mount by each caller's own useMemo — which is fine for
-// decorative content like this.
-function pickDaily(pool, count, salt) {
-  const now = new Date();
-  const dateKey = `${salt}-${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-  const random = mulberry32(hashStringToSeed(dateKey));
+// repeats. `salt` is mixed into the seed so different pools picked for
+// the same period (the ads carousel, the news feed, and the leaderboard
+// all use this) don't end up shuffled in lockstep with each other. NOTE:
+// if the app is left open across a day/week rollover, this won't
+// re-pick mid-session — it's only recomputed on mount by each caller's
+// own useMemo — which is fine for decorative content like this.
+function pickFromPool(pool, count, salt, periodKey) {
+  const random = mulberry32(hashStringToSeed(`${salt}-${periodKey}`));
 
   const shuffled = [...pool];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -561,6 +591,12 @@ function pickDaily(pool, count, salt) {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled.slice(0, count);
+}
+
+// Convenience wrapper over pickFromPool for the day-cadence callers
+// (AdsCarousel, NewsSection).
+function pickDaily(pool, count, salt) {
+  return pickFromPool(pool, count, salt, getLocalDateKey());
 }
 
 // Untitled Bybit-style sliding ad banner carousel, sitting directly above
@@ -805,50 +841,122 @@ function BotCard({ bot }) {
 // Sample content only — see the module comment at the top of this file for
 // why (no trader-ranking system exists yet). The PREVIEW tag keeps this
 // honest at a glance rather than reading as a real, working feature.
+// 20-name pool the Leaderboard's "top traders this week" are drawn from
+// — see pickWeeklyLeaderboard below for how 3 of these get chosen, along
+// with a simulated balance and strategy tag for each, refreshed on a
+// weekly cadence (matching the "this week" framing) rather than daily
+// like the ads carousel/news feed. Add, remove, or rename entries here
+// to change who can show up.
+const LEADERBOARD_NAMES = [
+  "quantex_trader", "cryptoking99", "satoshi_stacker", "moon_hodler99", "grid_master_fx",
+  "dca_daniel", "alpha_seeker", "blockchain_bee", "north_star_fx", "vertex_trades",
+  "lumen_capital", "zen_trader88", "apex_growth_hq", "solstice_fund", "northwind_trades",
+  "kite_runner_fx", "ember_stacks", "tidal_trades_io", "granite_grid", "echo_trader_x",
+];
+
+// Strategy tag randomly assigned to each of this week's 3 top traders —
+// purely decorative flavor text, not tied to any bot a trader actually
+// ran.
+const LEADERBOARD_STRATEGIES = ["Grid", "DCA", "Momentum"];
+
+// Simulated balance range (USDT) for this week's top traders — the ask
+// was specifically "above ten of thousands", so the floor is fixed at
+// $10,000; raise the max for a higher ceiling on the biggest balance
+// that can appear.
+const LEADERBOARD_BALANCE_MIN = 10000;
+const LEADERBOARD_BALANCE_MAX = 120000;
+
+// Picks 3 names out of LEADERBOARD_NAMES for this week's leaderboard,
+// each given a stable simulated balance (always above
+// LEADERBOARD_BALANCE_MIN) and a strategy tag. Everything here is seeded
+// off the current ISO week (see getLocalWeekKey/pickFromPool above), so
+// every visitor sees the same 3 traders with the same balances all week,
+// and a different 3 get picked automatically once the week rolls over —
+// there's no cron job or backend involved, it's purely a function of
+// "what week is it right now" computed fresh on each page load. Sorted
+// balance-descending so the biggest balance always renders first, the
+// way an actual "top trader" ranking would.
+function pickWeeklyLeaderboard() {
+  const weekKey = getLocalWeekKey();
+  const names = pickFromPool(LEADERBOARD_NAMES, 3, "leaderboard", weekKey);
+
+  return names
+    .map((name) => {
+      // A second, per-name seeded RNG (rather than reusing the shuffle's
+      // own random()) so adding/reordering LEADERBOARD_NAMES later can't
+      // accidentally change an already-picked trader's balance — each
+      // trader's numbers are fully determined by their own name and the
+      // current week, independent of everyone else's.
+      const random = mulberry32(hashStringToSeed(`leaderboard-detail-${name}-${weekKey}`));
+      const balance = LEADERBOARD_BALANCE_MIN + random() * (LEADERBOARD_BALANCE_MAX - LEADERBOARD_BALANCE_MIN);
+      const strategy = LEADERBOARD_STRATEGIES[Math.floor(random() * LEADERBOARD_STRATEGIES.length)];
+      return { name, balance, strategy };
+    })
+    .sort((a, b) => b.balance - a.balance);
+}
+
 function LeaderboardSection({ t }) {
+  const topTraders = useMemo(() => pickWeeklyLeaderboard(), []);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-      <SectionHeader title={t("home.leaderboard.title")} action={<PreviewTag t={t} />} />
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: "var(--cream-deep)",
-          border: "1px solid var(--cream-line)",
-          borderRadius: "var(--radius-lg)",
-          padding: "12px 14px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
-          <div
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: "var(--radius-full)",
-              background: "var(--teal-pale)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "var(--font-display)",
-              fontWeight: 700,
-              fontSize: "13px",
-              color: "var(--teal-deep)",
-            }}
-          >
-            Q
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "13px", color: "var(--ink-base)" }}>
-              {t("home.leaderboard.traderName")}
-            </span>
-            <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>
-              {t("home.leaderboard.traderSub")}
-            </span>
-          </div>
-        </div>
-        <span style={{ fontFamily: "var(--font-data)", fontSize: "13px", color: "var(--gain)" }}>+18.4%</span>
+      <SectionHeader title={t("home.leaderboard.title")} />
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+        {topTraders.map((trader, i) => (
+          <LeaderboardRow key={trader.name} rank={i + 1} trader={trader} />
+        ))}
       </div>
+    </div>
+  );
+}
+
+// One row — rank number takes the place of BotCard/Leaderboard's old
+// single initial-letter avatar (a plain "Q"), so the ranking itself is
+// legible at a glance rather than needing a separate badge alongside a
+// name-initial avatar.
+function LeaderboardRow({ rank, trader }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "12px 14px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+        <div
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: "var(--radius-full)",
+            background: "var(--teal-pale)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily: "var(--font-display)",
+            fontWeight: 700,
+            fontSize: "13px",
+            color: "var(--teal-deep)",
+          }}
+        >
+          {rank}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "13px", color: "var(--ink-base)" }}>
+            {trader.name}
+          </span>
+          <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>
+            {trader.strategy} • Top trader this week
+          </span>
+        </div>
+      </div>
+      <span className="qx-num" style={{ fontFamily: "var(--font-data)", fontSize: "13px", color: "var(--gain)" }}>
+        ${trader.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </span>
     </div>
   );
 }
@@ -1308,7 +1416,6 @@ function NewsSection({ markets, t }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <FeedTabs selected={feedTab} onSelect={setFeedTab} t={t} />
-        {feedTab === "news" && <PreviewTag t={t} />}
       </div>
 
       {feedTab === "news" && (
@@ -1507,7 +1614,7 @@ function MarketFeedRow({ ticker }) {
 
 // Bybit's home screen has a "Discover" row of educational article cards
 // near the bottom of the feed — this is that, adapted to Quantex. Unlike
-// Leaderboard/News (which are PREVIEW-tagged stand-ins for a system that
+// Leaderboard/News (which are simulated stand-ins for a system that
 // doesn't exist yet), this one is genuinely finished: there's no article/
 // CMS system anywhere in this app's architecture doc, so there's nothing
 // to "wire up later" here — it's a small fixed pool of real external
@@ -1653,23 +1760,5 @@ function DiscoverCard({ article }) {
         {article.body}
       </span>
     </a>
-  );
-}
-
-function PreviewTag({ t }) {
-  return (
-    <span
-      style={{
-        fontFamily: "var(--font-data)",
-        fontSize: "9px",
-        letterSpacing: "0.05em",
-        color: "var(--warning-text)",
-        background: "var(--warning-bg)",
-        padding: "2px 6px",
-        borderRadius: "var(--radius-xs)",
-      }}
-    >
-      {t("home.leaderboard.preview")}
-    </span>
   );
 }

@@ -66,14 +66,35 @@ const GRID_MODES = ["Arithmetic", "Geometric"];
 // preset is ever added here.
 const SESSION_LENGTHS = [5, 10, 30, 60, 1440, 4320, 10080, 20160, 43200];
 
+// Mirrors backend/app/services/session_limit_service.py's
+// DEFAULT_DAILY_SESSION_LIMIT and FREE_TIER_MAX_SESSION_LENGTH_MINUTES —
+// duplicated here rather than fetched, since there's no shared
+// frontend/backend module for plain constants in this codebase. This is
+// purely a UX nicety (a free-tier user never even sees an option that would
+// just 400 on submit) — the backend is what actually enforces the cap
+// regardless of what this file does or doesn't filter. Keep both files' two
+// numbers in sync if either ever changes.
+const DEFAULT_DAILY_SESSION_LIMIT = 3;
+const FREE_TIER_MAX_SESSION_LENGTH_MINUTES = 30;
+
 function baseAsset(pair) {
   return pair.split("/")[0];
 }
 
 export default function CreateBotPage() {
   const { t } = useTranslation();
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const navigate = useNavigate();
+
+  // A user an admin hasn't raised above the default is free-tier — same
+  // is_free_tier() comparison session_limit_service.py makes on the
+  // backend. Filters the session-length picker down to only what this user
+  // could actually submit successfully, rather than showing every option
+  // and letting a free-tier pick fail after the fact.
+  const isFreeTier = (user?.daily_session_limit ?? DEFAULT_DAILY_SESSION_LIMIT) <= DEFAULT_DAILY_SESSION_LIMIT;
+  const availableSessionLengths = isFreeTier
+    ? SESSION_LENGTHS.filter((minutes) => minutes <= FREE_TIER_MAX_SESSION_LENGTH_MINUTES)
+    : SESSION_LENGTHS;
 
   const [pair, setPair] = useState(PAIRS[0]);
   const [gridMode, setGridMode] = useState(GRID_MODES[0]);
@@ -197,7 +218,7 @@ export default function CreateBotPage() {
             <SelectField
               label={t("bots.create.sessionLengthLabel")}
               value={sessionLengthMinutes}
-              options={SESSION_LENGTHS}
+              options={availableSessionLengths}
               onChange={setSessionLengthMinutes}
               renderIcon={() => <Icon name="clock" size={20} color="var(--teal-base)" />}
               renderLabel={(minutes) => t(`bots.create.sessionLengthOption${minutes}`)}

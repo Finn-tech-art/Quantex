@@ -42,6 +42,26 @@ class WinRateResponse(BaseModel):
     is_default: bool
 
 
+# ── Free-tier session limits ────────────────────────────────────────────────
+class SetSessionLimitRequest(BaseModel):
+    email: EmailStr
+    # See session_limit_service.py's module comment — raising this above
+    # DEFAULT_DAILY_SESSION_LIMIT (3) lifts BOTH the 30-minute session-length
+    # cap and the daily-session-count cap for this user at once.
+    daily_session_limit: int
+
+
+class SessionLimitResponse(BaseModel):
+    user_id: str
+    email: str
+    daily_session_limit: int
+    # True when daily_session_limit is still at the out-of-the-box default —
+    # same is_default framing WinRateResponse above uses, so the admin page
+    # can show the same "DEFAULT — not set by an admin yet" / "SET BY ADMIN"
+    # badge treatment.
+    is_default: bool
+
+
 # ── Dashboard overview ───────────────────────────────────────────────────────
 class AdminDailyStatsEntry(BaseModel):
     date: str  # "YYYY-MM-DD", UTC calendar day

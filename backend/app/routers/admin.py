@@ -22,7 +22,9 @@ from app.models.admin import (
     PendingSweepEntry,
     PendingSweepsResponse,
     QueuedSweepEntry,
+    SessionLimitResponse,
     SetConsolidationAddressRequest,
+    SetSessionLimitRequest,
     SetWinRateRequest,
     SetWithdrawalFeeRequest,
     SweepHistoryEntry,
@@ -53,6 +55,7 @@ from app.services import (
     chain_watcher_service,
     custody_service,
     kyc_service,
+    session_limit_service,
     win_rate_service,
     withdrawal_fee_service,
     withdrawal_service,
@@ -135,6 +138,48 @@ def set_win_rate(
         metadata={"win_rate": body.win_rate, "target_min_return": body.target_min_return},
     )
     return WinRateResponse(**result)
+
+
+# ── Free-tier session limits ──────────────────────────────────────────────────
+# Admins look this up/set it by email (not user_id — an admin thinks in
+# emails, same as the KYC and withdrawal queues' own admin-facing displays),
+# see session_limit_service.get_user_by_email/set_daily_session_limit.
+@router.get("/session-limits/{email}", response_model=SessionLimitResponse)
+def get_session_limit(email: str, admin: dict = Depends(get_current_admin)):
+    user = session_limit_service.get_user_by_email(email)
+    if user is None:
+        raise HTTPException(status_code=404, detail="No user found for that email")
+    return SessionLimitResponse(
+        user_id=user["id"],
+        email=user["email"],
+        daily_session_limit=user["daily_session_limit"],
+        is_default=session_limit_service.is_free_tier(user["daily_session_limit"]),
+    )
+
+
+@router.put("/session-limits", response_model=SessionLimitResponse)
+def set_session_limit(body: SetSessionLimitRequest, admin: dict = Depends(get_current_admin)):
+    if body.daily_session_limit < 0:
+        raise HTTPException(status_code=400, detail="daily_session_limit must be >= 0")
+
+    user = session_limit_service.get_user_by_email(body.email)
+    if user is None:
+        raise HTTPException(status_code=404, detail="No user found for that email")
+
+    result = session_limit_service.set_daily_session_limit(user["id"], body.daily_session_limit)
+    log_admin_action(
+        admin_id=admin["id"],
+        action="SESSION_LIMIT_SET",
+        target_type="users",
+        target_id=user["id"],
+        metadata={"email": body.email, "daily_session_limit": body.daily_session_limit},
+    )
+    return SessionLimitResponse(
+        user_id=result["user_id"],
+        email=user["email"],
+        daily_session_limit=result["daily_session_limit"],
+        is_default=session_limit_service.is_free_tier(result["daily_session_limit"]),
+    )
 
 
 # ── Deposit consolidation address settings (module 1) ────────────────────────

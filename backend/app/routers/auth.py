@@ -68,6 +68,7 @@ def me(user: dict = Depends(get_current_user)):
         first_name=user.get("first_name"),
         last_name=user.get("last_name"),
         country=user.get("country"),
+        daily_session_limit=user.get("daily_session_limit", 3),
     )
 
 
@@ -90,6 +91,7 @@ def set_country(body: SetCountryRequest, user: dict = Depends(get_current_user))
         first_name=user.get("first_name"),
         last_name=user.get("last_name"),
         country=body.country,
+        daily_session_limit=user.get("daily_session_limit", 3),
     )
 
 

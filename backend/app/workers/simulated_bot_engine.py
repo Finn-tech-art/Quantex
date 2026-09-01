@@ -31,7 +31,7 @@ import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.services import bot_fill_service, bot_service, simulated_bot_service, win_rate_service
+from app.services import bot_fill_service, bot_service, session_limit_service, simulated_bot_service, win_rate_service
 from app.services.fake_trading_service import generate_fake_trading_result
 from app.services.redis_client import get_redis_sync
 from app.services.simulated_bot_ledger_service import settle_simulated_session
@@ -177,6 +177,24 @@ def _evaluate_one_simulated_bot(bot: dict) -> None:
 
 
 def _start_new_session(bot: dict, sim: dict) -> None:
+    # Free-tier daily cap — checked BEFORE any of the (comparatively
+    # expensive, real-Binance-hitting) result generation below runs, so a
+    # user who's out of budget for today never has one generated for them at
+    # all. Counted per USER across every bot they own (session_limit_service
+    # reads/writes by user_id, not bot_id) — a bot-scoped count would let a
+    # free user dodge the daily limit just by creating more bots. Left due
+    # (next_session_due_at untouched) rather than rescheduled, so this is
+    # simply re-checked — cheap, a single count query — on every sweep tick
+    # until either budget frees up (a new UTC day) or an admin raises the
+    # user's limit; see session_limit_service.has_session_budget_today.
+    daily_session_limit = session_limit_service.get_daily_session_limit(bot["user_id"])
+    if not session_limit_service.has_session_budget_today(bot["user_id"], daily_session_limit):
+        logger.info(
+            "Simulated bot %s: user %s has used today's %d-session budget — skipping until tomorrow",
+            bot["id"], bot["user_id"], daily_session_limit,
+        )
+        return
+
     today_rate = win_rate_service.get_today_win_rate()
     result = generate_fake_trading_result(
         target_min_return=today_rate["target_min_return"],
@@ -193,6 +211,10 @@ def _start_new_session(bot: dict, sim: dict) -> None:
         # Nothing was persisted, so there's nothing to log as "started".
         logger.info("Simulated bot %s stopped before its new session could be saved — dropped", bot["id"])
         return
+    # Only counted against today's budget once the session is actually
+    # saved (not speculatively before start_pending_session's own guard
+    # above) — see record_session_started's own docstring for why.
+    session_limit_service.record_session_started(bot["user_id"])
     _publish_session_started(bot["id"])
     logger.info(
         "Simulated bot %s started session %s — %d fills scheduled over %d minutes",

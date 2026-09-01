@@ -409,6 +409,26 @@ export function setWinRate(adminToken, { winDate, winRate, targetMinReturn }) {
   });
 }
 
+// ── Free-tier session limits ─────────────────────────────────────────────────
+// Looked up/set by email, not user_id — see routers/admin.py's own comment on
+// why (an admin thinks in emails, same as the KYC/withdrawal queues).
+export function getSessionLimit(adminToken, email) {
+  return request(`/admin/session-limits/${encodeURIComponent(email)}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+}
+
+export function setSessionLimit(adminToken, { email, dailySessionLimit }) {
+  return request("/admin/session-limits", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      email,
+      daily_session_limit: dailySessionLimit,
+    }),
+  });
+}
+
 // ── Withdrawal fee setting ───────────────────────────────────────────────────
 export function getWithdrawalFee(adminToken) {
   return request("/admin/withdrawal-fee", {

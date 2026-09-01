@@ -69,3 +69,12 @@ class UserProfile(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     country: str | None = None
+    # How many simulated-bot sessions this user can start per UTC day, and
+    # the longest session_length_minutes they can pick when creating a bot
+    # (see session_limit_service.py — both are driven by this single
+    # column). 3 is the out-of-the-box default every user starts with; an
+    # admin raises it per user via /admin/session-limits. The frontend's
+    # CreateBotPage reads this to grey out session lengths over 30 minutes
+    # for a still-default-limit user, rather than letting them pick one and
+    # only finding out it's rejected after submitting.
+    daily_session_limit: int = 3

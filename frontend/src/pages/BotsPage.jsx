@@ -30,6 +30,8 @@ export default function BotsPage() {
           {t("bots.title")}
         </span>
 
+        <CreateBotCard t={t} />
+
         {bots === null ? (
           <AnimatedPsi mode="working" size={26} color="var(--teal-base)" />
         ) : bots.length === 0 ? (
@@ -43,13 +45,6 @@ export default function BotsPage() {
             ))}
           </div>
         )}
-
-        <CreateBotCard t={t} />
-
-        {/* Demo session entry — always shown, uses the selected-card style
-            (teal-pale bg, teal-base border) from design system Section 9
-            "Card — Selected/highlighted" to stand out from real bot rows. */}
-        <DemoCard t={t} />
       </div>
     </div>
   );
@@ -73,58 +68,6 @@ function CreateBotCard({ t }) {
       <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "12.5px", color: "var(--teal-base)" }}>
         + {t("bots.create.title")}
       </span>
-    </Link>
-  );
-}
-
-function DemoCard({ t }) {
-  return (
-    <Link
-      to="/bots/demo"
-      style={{
-        background: "var(--teal-pale)",
-        border: "1.5px solid var(--teal-base)",
-        borderRadius: "var(--radius-lg)",
-        padding: "12px 14px",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        textDecoration: "none",
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-        <span
-          style={{
-            fontFamily: "var(--font-body)",
-            fontWeight: 600,
-            fontSize: "12.5px",
-            color: "var(--teal-base)",
-          }}
-        >
-          {t("bots.demo.pageTitle")}
-        </span>
-        <span
-          style={{
-            fontFamily: "var(--font-data)",
-            fontSize: "9.5px",
-            color: "var(--ink-soft)",
-            letterSpacing: "0.04em",
-          }}
-        >
-          40% MIN RETURN · 90% WIN RATE
-        </span>
-      </div>
-      {/* Pending-dot shows this is simulated, not live — design system Section 9 "Status Dot" */}
-      <span
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          background: "var(--pending-dot)",
-          display: "inline-block",
-          flexShrink: 0,
-        }}
-      />
     </Link>
   );
 }

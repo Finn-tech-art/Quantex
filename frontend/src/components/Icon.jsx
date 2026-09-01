@@ -169,6 +169,21 @@ const ICONS = {
       </>
     ),
   },
+  // Two opposing arrows (top pointing right, bottom pointing left) — the
+  // standard "swap/convert" glyph, used by HomePage's Convert quick-action
+  // tile and ConvertPage.jsx's own header. Only an outline variant exists
+  // (QuickTile never asks for `filled`, same as deposit/withdraw/newBot
+  // above).
+  convert: {
+    outline: (color) => (
+      <>
+        <path d="M5 8h12" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M14 4l3 4-3 4" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M19 16H7" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M10 20l-3-4 3-4" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+  },
 
   // ── System / chrome ──────────────────────────────────────────────────
   bell: {

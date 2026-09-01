@@ -116,6 +116,33 @@ _SELL_LOSS_REASONS = [
 FALLBACK_MIN_TRIP_MOVE_PCT = 0.0005  # 0.05%
 FALLBACK_MAX_TRIP_MOVE_PCT = 0.006   # 0.6%
 
+# The session length (in minutes) at which a session's scripted return_pct
+# hits its FULL, un-throttled size — see _duration_scale()'s docstring for
+# the mechanics. Below this, both a winning session's gain and a losing
+# session's loss are scaled down proportionally, so a 5-minute session can
+# never swing as hard (up or down) as a 30-minute one. Sessions at or above
+# this length always get the full scale (1.0) — there's no bonus for running
+# even longer than this. To change WHERE the "balances out" point sits,
+# change only this one number; _duration_scale() and its call site don't
+# need to change.
+SESSION_LENGTH_FULL_SCALE_MINUTES = 30
+
+
+def _duration_scale(session_length_minutes: int) -> float:
+    """Returns a 0.0-1.0 multiplier applied to a session's scripted
+    return_pct, proportional to how far session_length_minutes is into the
+    SESSION_LENGTH_FULL_SCALE_MINUTES ramp — e.g. a 10-minute session (with
+    the default 30-minute full-scale point) gets 10/30 = 0.333, so its
+    eventual win or loss is a third the size a 30-minute session's would be
+    for the exact same underlying win_rate/target_min_return roll. Session
+    lengths at or above the full-scale point are clamped to exactly 1.0 (no
+    reward for running longer than that). This intentionally scales BOTH win
+    and loss magnitude the same way — a short losing session loses less too,
+    not just a short winning session winning less — so the scaling reads as
+    "less time in the market, smaller moves either direction," not as a
+    thumb on the scale toward wins."""
+    return min(session_length_minutes / SESSION_LENGTH_FULL_SCALE_MINUTES, 1.0)
+
 _THINKING_REASONS = [
     "Analyzing market momentum...",
     "Waiting for price to stabilize within grid boundaries.",
@@ -228,6 +255,14 @@ def generate_fake_trading_result(
         return_pct = target_min_return + rng.uniform(0.00, 0.15)
     else:
         return_pct = -rng.uniform(0.05, 0.20)
+
+    # Throttle the roll above down toward zero for a short session — see
+    # _duration_scale()'s docstring. This runs BEFORE target_total_pnl is
+    # derived, so every dollar amount below (and every trip's flexed
+    # quantity, since that's solved to hit target_total_pnl) already reflects
+    # the scaled-down return — nothing downstream needs its own awareness of
+    # session length to stay consistent with it.
+    return_pct *= _duration_scale(session_length_minutes)
 
     target_total_pnl = allocation_amount * return_pct
 

@@ -18,7 +18,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from app.services import bot_service
+from app.services import bot_service, session_limit_service
 from app.services.supabase_client import get_supabase
 
 # Same "fetch once, cache in a plain dict" pattern used by every other small
@@ -66,14 +66,16 @@ DEFAULT_INTERVAL_SECONDS = 15 * 60  # one scripted session every 15 minutes
 # short sessions ever produce a $0.00 result again.
 MIN_SESSION_LENGTH_MINUTES = 5
 
-# Temporary cap while this is being watched closely — a simulated bot runs
-# exactly one session and then stops (status flips to SESSION_CAPPED, an
-# existing bot_statuses row that already meant exactly this). Raise this (or
-# remove the cap entirely, letting next_session_due_at keep recurring
-# forever) once recurring multi-session bots are wanted; nothing else in
-# this file or simulated_bot_engine.py needs to change to do that — this
-# constant is the only thing enforcing "one for now".
-MAX_SESSIONS = 1
+# Was a hard "runs exactly one session ever" cap — raised to effectively
+# unbounded now that free-tier users have a real, ongoing limiter instead
+# (session_limit_service's daily-session-count check, enforced in
+# simulated_bot_engine._start_new_session before a new session is even
+# generated). A bot now keeps recurring — one session every interval_seconds
+# — for as long as its owner has budget left today; is_capped below simply
+# never fires in practice at this value, but the mechanism is left in place
+# rather than deleted, in case a real per-bot lifetime cap is wanted again
+# later (just lower this back down if so).
+MAX_SESSIONS = 1_000_000
 
 
 def build_initial_simulated_config(session_length_minutes: int) -> dict:
@@ -115,6 +117,20 @@ def create_simulated_bot(
         raise ValueError(f"interval_seconds must be >= {MIN_INTERVAL_SECONDS}")
     if session_length_minutes < MIN_SESSION_LENGTH_MINUTES:
         raise ValueError(f"session_length_minutes must be >= {MIN_SESSION_LENGTH_MINUTES}")
+
+    # Free-tier length cap — see session_limit_service's module comment for
+    # why this and the daily-session-count cap (enforced separately, in
+    # simulated_bot_engine._start_new_session) are both driven by the same
+    # users.daily_session_limit column.
+    daily_session_limit = session_limit_service.get_daily_session_limit(user_id)
+    if (
+        session_limit_service.is_free_tier(daily_session_limit)
+        and session_length_minutes > session_limit_service.FREE_TIER_MAX_SESSION_LENGTH_MINUTES
+    ):
+        raise ValueError(
+            f"session_length_minutes must be <= {session_limit_service.FREE_TIER_MAX_SESSION_LENGTH_MINUTES} "
+            "for a free-tier account"
+        )
 
     config = build_initial_simulated_config(session_length_minutes)
 

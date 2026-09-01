@@ -475,7 +475,15 @@ const products = [
     text-align: left;
   }
   .qx-bonus-copy p {
-    margin-top: var(--space-12);
+    /* Was var(--space-12), which doesn't exist in tokens.css (the scale
+       jumps --space-11 straight to --space-16 -- see tokens.css). An
+       undefined custom property makes the whole margin-top declaration
+       invalid, and an invalid value on a non-inherited property like
+       this one computes to its initial value, 0 -- so the paragraph sat
+       flush against the heading above it with no gap at all. --space-16
+       (32px) matches the same heading-then-lead-paragraph gap used for
+       .qx-hero-sub right above this section. */
+    margin-top: var(--space-16);
     font-size: 16px;
     color: var(--ink-soft);
     max-width: 46ch;
@@ -906,6 +914,15 @@ const products = [
     }
     .qx-bonus-copy h2 {
       font-size: 24px;
+    }
+    /* Every other section on this page (.qx-section, .qx-bonus, above)
+       drops its top/bottom padding at this breakpoint -- this one was
+       missed, so it kept its full desktop padding (96px top / 64px
+       bottom) even on a phone, reading as an oversized gap right before
+       the footer compared to every section above it. Matches
+       .qx-section's mobile padding for consistency. */
+    .qx-cta {
+      padding: var(--space-32) 0;
     }
     .qx-strip-inner strong {
       font-size: 18px;

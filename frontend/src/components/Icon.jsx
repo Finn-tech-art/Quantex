@@ -412,6 +412,22 @@ const ICONS = {
     ),
   },
 
+  // A sheet of paper with a few lines of text on it — used by WalletPage.jsx's
+  // TopNav as the button that opens WalletHistoryPage.jsx (the full ledger
+  // activity list, moved to its own page so it's no longer inline on the
+  // main Wallet screen — see WalletPage.jsx's own comment on that). Same
+  // "document/receipt" read as the history icon on Bybit's own Assets
+  // screen, which is the reference this was matched to. Only an outline
+  // variant exists; nothing renders this filled.
+  history: {
+    outline: (color) => (
+      <>
+        <rect x="5" y="3" width="14" height="18" rx="2" stroke={color} strokeWidth="1.6" fill="none" />
+        <path d="M8 8h8M8 12h8M8 16h5" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      </>
+    ),
+  },
+
   // Plain X — used as the "clear this input" glyph inside MarketsPage.jsx's
   // search box once it has text typed into it. Only an outline variant
   // exists; nothing renders this filled.

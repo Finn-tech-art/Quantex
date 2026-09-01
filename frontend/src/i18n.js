@@ -45,7 +45,6 @@ const resources = {
         checkStatus: 'Check status',
         assets: 'Assets',
         noAssets: 'No balances yet: make a deposit to get started.',
-        recentActivity: 'Recent activity',
         noActivity: 'No activity yet.',
         // Human labels for every ledger_entry_types row (see
         // quantex-schema.sql) — keyed by the exact entry_type string the

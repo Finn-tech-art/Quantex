@@ -22,6 +22,7 @@ import BotDetailPage from "./pages/BotDetailPage";
 import CreateBotPage from "./pages/CreateBotPage";
 import FakeSessionPage from "./pages/FakeSessionPage";
 import KycPage from "./pages/KycPage";
+import WalletHistoryPage from "./pages/WalletHistoryPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminOverviewPage from "./pages/AdminOverviewPage";
 import AdminWinRatePage from "./pages/AdminWinRatePage";
@@ -67,6 +68,14 @@ function App() {
               <Route path="/menu" element={<MenuPage />} />
             </Route>
 
+            <Route
+              path="/wallet/history"
+              element={
+                <ProtectedRoute>
+                  <WalletHistoryPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/deposit"
               element={

@@ -23,7 +23,7 @@ from decimal import Decimal
 from eth_account import Account
 from eth_account.messages import encode_typed_data
 from tronpy import Tron
-from tronpy.exceptions import AddressNotFound
+from tronpy.exceptions import AddressNotFound, TransactionNotFound
 from tronpy.keys import PrivateKey, is_base58check_address
 from tronpy.providers import HTTPProvider
 from web3 import Web3
@@ -365,9 +365,25 @@ def _wait_for_confirmation(client: Tron, tx_id: str) -> bool:
     Returns True if it succeeded on-chain, False if it reverted or never
     confirmed within the wait window — callers must not treat False as
     proof nothing happened; the on-chain balance check in
-    sweep_tron_usdt_deposit is the actual source of truth for that."""
+    sweep_tron_usdt_deposit is the actual source of truth for that.
+
+    get_transaction_info RAISES tronpy.exceptions.TransactionNotFound
+    (rather than returning an empty/falsy result) for the first several
+    seconds after a broadcast, before TronGrid has indexed it — this is the
+    normal, expected state for at least the first poll or two, not a real
+    error. Found live: this function had never actually been exercised
+    against a real broadcast-and-wait before this codebase's first real
+    mainnet sweep attempt, so this gap was never hit until then. Treating it
+    as "keep polling" (same as the falsy-info case below) rather than
+    letting it propagate is what fixes that — a transaction that genuinely
+    never confirms still correctly falls through to `return False` once
+    _CONFIRMATION_MAX_ATTEMPTS is exhausted, same as before.
+    """
     for _ in range(_CONFIRMATION_MAX_ATTEMPTS):
-        info = client.get_transaction_info(tx_id)
+        try:
+            info = client.get_transaction_info(tx_id)
+        except TransactionNotFound:
+            info = None
         if info and "receipt" in info:
             return info["receipt"].get("result") == "SUCCESS"
         time.sleep(_CONFIRMATION_POLL_SECONDS)

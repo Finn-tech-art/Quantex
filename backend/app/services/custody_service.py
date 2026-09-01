@@ -187,14 +187,24 @@ def set_consolidation_address(network_code: str, address: str, admin_id: str) ->
 
 # ── Tron sweep (Module 2) ────────────────────────────────────────────────────
 
-# How much TRX-equivalent to delegate for Energy per sweep. Generous padding
-# over the ~1.5 TRX a standard USDT transfer actually burns at the current
-# ~100 sun/energy price (see the architecture doc's "How a sweep moves
-# funds" section) — congestion can push the real cost up, and a failed
-# transfer from underestimating is more disruptive than a slightly oversized
+# How much TRX-equivalent to delegate for Energy per sweep. Padding over
+# the ~1.5 TRX a standard USDT transfer actually burns at the current ~100
+# sun/energy price (see the architecture doc's "How a sweep moves funds"
+# section) — congestion can push the real cost up, and a failed transfer
+# from underestimating is more disruptive than a slightly oversized
 # delegation. Raise this if sweeps start failing with an out-of-energy
 # error; lower it once real usage shows it's comfortably oversized.
-TRON_ENERGY_DELEGATION_TRX = Decimal("15")
+#
+# Lowered from 15 to 10 for the initial mainnet gas wallet funding — the
+# wallet was staked with ~12 TRX (see stake_gas_wallet's call site history),
+# which can't cover a 15 TRX delegation with anything left as an unstaked
+# fee buffer. 10 still leaves ~6-7x headroom over the real ~1.5 TRX cost, so
+# this isn't a thinner safety margin in practice, just a smaller absolute
+# number to match what's actually staked. Raise both the staked amount (via
+# stake_gas_wallet) and this constant together if a larger cushion is ever
+# wanted — they're not required to move in lockstep, but a delegation size
+# larger than what's staked will always fail outright.
+TRON_ENERGY_DELEGATION_TRX = Decimal("10")
 
 # Below this, a deposit address's remaining on-chain USDT balance is treated
 # as "already swept, nothing left worth another attempt" — same philosophy

@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
-from gotrue.errors import AuthError
 
 from app.models.deposit import ExpectDepositRequest, ExpectDepositResponse
 from app.services.deposit_pending_service import PENDING_TTL_SECONDS, set_pending
 from app.services.redis_client import get_redis
-from app.services.supabase_client import get_supabase_auth_client
-from app.utils.auth import get_current_user
+from app.utils.auth import get_current_user, user_id_from_ws_token
 from app.workers.live_deposit_watch import watch_pending_deposit
 
 router = APIRouter(prefix="/deposits", tags=["deposits"])
@@ -33,25 +31,11 @@ async def expect_deposit(body: ExpectDepositRequest, user: dict = Depends(get_cu
     return ExpectDepositResponse(watching=True, ttl_seconds=PENDING_TTL_SECONDS)
 
 
-async def _user_id_from_token(token: str) -> str | None:
-    # Browsers' native WebSocket API can't set an Authorization header, so the
-    # access token travels as a query param here instead — same validation
-    # get_current_user does, just without the HTTPBearer/Depends plumbing
-    # that's built around a normal HTTP request.
-    try:
-        response = get_supabase_auth_client().auth.get_user(token)
-    except AuthError:
-        return None
-    if response is None or response.user is None:
-        return None
-    return response.user.id
-
-
 @router.websocket("/ws")
 async def deposits_ws(websocket: WebSocket, token: str):
     await websocket.accept()
 
-    user_id = await _user_id_from_token(token)
+    user_id = await user_id_from_ws_token(token)
     if user_id is None:
         await websocket.close(code=4401)
         return

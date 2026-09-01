@@ -11,7 +11,7 @@ from app.models.auth import (
     UserProfile,
     VerifyEmailConfirmRequest,
 )
-from app.services import auth_service
+from app.services import auth_service, session_limit_service
 from app.services.otp_service import PURPOSE_EMAIL_VERIFICATION, OtpCooldownError, generate_and_send_otp, verify_otp
 from app.utils.auth import get_current_user
 
@@ -72,6 +72,7 @@ def me(user: dict = Depends(get_current_user)):
         last_name=user.get("last_name"),
         country=user.get("country"),
         daily_session_limit=user.get("daily_session_limit", 3),
+        sessions_used_today=session_limit_service.sessions_started_today(user["id"]),
     )
 
 
@@ -97,6 +98,7 @@ def set_country(body: SetCountryRequest, user: dict = Depends(get_current_user))
         last_name=user.get("last_name"),
         country=body.country,
         daily_session_limit=user.get("daily_session_limit", 3),
+        sessions_used_today=session_limit_service.sessions_started_today(user["id"]),
     )
 
 
@@ -124,6 +126,7 @@ def set_avatar(body: SetAvatarRequest, user: dict = Depends(get_current_user)):
         last_name=user.get("last_name"),
         country=user.get("country"),
         daily_session_limit=user.get("daily_session_limit", 3),
+        sessions_used_today=session_limit_service.sessions_started_today(user["id"]),
     )
 
 

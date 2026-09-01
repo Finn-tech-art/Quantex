@@ -99,3 +99,10 @@ class UserProfile(BaseModel):
     # for a still-default-limit user, rather than letting them pick one and
     # only finding out it's rejected after submitting.
     daily_session_limit: int = 3
+    # How many of today's daily_session_limit slots this user has already
+    # used — see session_limit_service.sessions_started_today, which is
+    # exactly what simulated_bot_service.create_simulated_bot checks before
+    # allowing a new bot. Surfaced here so CreateBotPage.jsx can tell the
+    # user up front ("you've used 3/3 today") rather than only finding out
+    # after filling out the whole form and hitting Confirm & create.
+    sessions_used_today: int = 0

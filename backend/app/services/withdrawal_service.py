@@ -49,7 +49,7 @@ from app.services import (
 from app.services.auth_service import kyc_status_code
 from app.services.network_assets import NETWORK_CONFIG
 from app.services.otp_service import generate_and_send_otp, verify_otp
-from app.services.redis_client import get_redis
+from app.services.redis_client import get_redis, get_redis_sync
 from app.services.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -204,6 +204,38 @@ for _network_code, _cfg in NETWORK_CONFIG.items():
 
 def _draft_key(request_id: str) -> str:
     return f"withdrawal_draft:{request_id}"
+
+
+def _withdrawal_updates_channel(user_id: str) -> str:
+    return f"withdrawal_updates:{user_id}"
+
+
+def _publish_status_update(user_id: str, withdrawal_id: str, status: str) -> None:
+    """Pushes a "this withdrawal's status just changed" event to whichever
+    WithdrawPage.jsx tab(s) this user currently has open, via the same
+    Redis pub/sub pattern deposit_pending_service.clear_and_publish_sync
+    already uses for live deposit updates — here there's no "is anyone
+    watching" gate to check first (unlike deposits' pending-key dance),
+    since publishing to a channel nobody has subscribed to is a harmless
+    no-op in Redis: this can just fire unconditionally every time
+    approve_withdrawal/reject_withdrawal actually changes a row's status.
+    Called from sync code (both callers are plain sync functions invoked
+    from a sync FastAPI route), so this uses get_redis_sync() like
+    deposit_pending_service's own sync-context publish does — never the
+    asyncio client, which would need an event loop that isn't there.
+
+    Best-effort: wrapped in try/except so a Redis hiccup can never turn an
+    already-committed approval/rejection into a 500 — the websocket push is
+    a live-update convenience on top of a decision that already landed for
+    real; WithdrawPage.jsx's own polling (see its useEffect on
+    myWithdrawals) is what still catches this case, just up to 5s slower."""
+    try:
+        get_redis_sync().publish(
+            _withdrawal_updates_channel(user_id),
+            json.dumps({"withdrawal_id": withdrawal_id, "status": status}),
+        )
+    except Exception:
+        logger.exception("Failed to publish withdrawal status update (withdrawal=%s)", withdrawal_id)
 
 
 def _available_balance(user_id: str, asset_id: int) -> Decimal:
@@ -719,6 +751,11 @@ def approve_withdrawal(withdrawal_id: str, admin_id: str) -> bool:
         fee_amount,
     )
 
+    # Instant push to any open WithdrawPage.jsx tab — see
+    # _publish_status_update's own docstring for why this is safe to fire
+    # unconditionally and what still catches it if this fails.
+    _publish_status_update(row["user_id"], withdrawal_id, "APPROVED")
+
     return True
 
 
@@ -747,4 +784,5 @@ def reject_withdrawal(withdrawal_id: str, reason: str) -> bool:
             "Withdrawal rejected",
             f"Your withdrawal request was rejected: {reason}",
         )
+        _publish_status_update(claimed.data[0]["user_id"], withdrawal_id, "REJECTED")
     return bool(claimed.data)

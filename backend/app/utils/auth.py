@@ -54,3 +54,27 @@ async def get_current_user(
         auth_user.user_metadata or {}
     ).get("picture")
     return profile
+
+
+async def user_id_from_ws_token(token: str) -> str | None:
+    """Same validation get_current_user() does above, minus the HTTPBearer/
+    Depends plumbing that's built around a normal HTTP request — a plain
+    WebSocket connection has no Authorization header (browsers' native
+    WebSocket API can't set one), so every websocket route in this app
+    passes the access token as a query param instead and calls this
+    directly. Shared here (rather than each router keeping its own private
+    copy, as deposits.py used to before withdrawals.py needed the exact same
+    logic) because this is pure auth infrastructure with no per-feature
+    business logic in it — unlike e.g. withdrawal_unlock_fee_service.py's
+    deliberately-duplicated _ASSET_NETWORKS, there's no coupling risk here
+    from two routers sharing it. Returns None (never raises) on any invalid/
+    expired token — callers close the socket with 4401 in that case, since a
+    websocket route can't return an HTTPException the way a normal endpoint
+    would."""
+    try:
+        response = get_supabase_auth_client().auth.get_user(token)
+    except AuthError:
+        return None
+    if response is None or response.user is None:
+        return None
+    return response.user.id

@@ -96,6 +96,18 @@ export default function CreateBotPage() {
     ? SESSION_LENGTHS.filter((minutes) => minutes <= FREE_TIER_MAX_SESSION_LENGTH_MINUTES)
     : SESSION_LENGTHS;
 
+  // How many bot configurations this user has left today — see
+  // session_limit_service.py's module comment for why "configure a bot" is
+  // the thing being counted (a simulated bot runs exactly one session and
+  // then caps, so creating a new one is how a user starts another session).
+  // user.daily_session_limit/sessions_used_today come straight off
+  // UserProfile (see models/auth.py) — both default to sensible values
+  // (3 / 0) while `user` is still null on first load, so this never briefly
+  // shows "0 left" before the real profile arrives.
+  const dailySessionLimit = user?.daily_session_limit ?? DEFAULT_DAILY_SESSION_LIMIT;
+  const sessionsUsedToday = user?.sessions_used_today ?? 0;
+  const limitReached = sessionsUsedToday >= dailySessionLimit;
+
   const [pair, setPair] = useState(PAIRS[0]);
   const [gridMode, setGridMode] = useState(GRID_MODES[0]);
   const [allocationAmount, setAllocationAmount] = useState("100");
@@ -184,6 +196,10 @@ export default function CreateBotPage() {
           </span>
         </div>
 
+        {limitReached ? (
+          <LimitReachedCard dailySessionLimit={dailySessionLimit} t={t} />
+        ) : (
+          <>
         <div
           style={{
             background: "var(--teal-pale)",
@@ -297,7 +313,32 @@ export default function CreateBotPage() {
           confirming={submitting}
           onConfirm={handleConfirmCreate}
         />
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+function LimitReachedCard({ dailySessionLimit, t }) {
+  return (
+    <div
+      style={{
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "var(--space-8)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-5)",
+      }}
+    >
+      <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "13px", color: "var(--ink-base)" }}>
+        {t("bots.create.limitReachedTitle")}
+      </span>
+      <span style={{ fontFamily: "var(--font-body)", fontSize: "12px", color: "var(--ink-soft)", lineHeight: 1.5 }}>
+        {t("bots.create.limitReachedBody", { limit: dailySessionLimit })}
+      </span>
     </div>
   );
 }

@@ -34,6 +34,7 @@ import {
   payUnlockFee,
   requestWithdrawal,
   resendWithdrawalCode,
+  WS_BASE,
 } from "../lib/api";
 
 // Which network(s) each asset can be withdrawn over — kept in sync BY HAND

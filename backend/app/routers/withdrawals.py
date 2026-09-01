@@ -5,7 +5,7 @@
 
 from decimal import Decimal, InvalidOperation
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket
 
 from app.models.withdrawal import (
     WithdrawalConfirmBody,
@@ -19,7 +19,8 @@ from app.models.withdrawal import (
 )
 from app.services import withdrawal_fee_service, withdrawal_service
 from app.services.otp_service import OtpCooldownError
-from app.utils.auth import get_current_user
+from app.services.redis_client import get_redis
+from app.utils.auth import get_current_user, user_id_from_ws_token
 
 router = APIRouter(prefix="/withdrawals", tags=["withdrawals"])
 
@@ -91,3 +92,38 @@ def my_withdrawals(user: dict = Depends(get_current_user)):
     return WithdrawalListResponse(
         withdrawals=[WithdrawalResponse(**w) for w in withdrawal_service.list_my_withdrawals(user["id"])]
     )
+
+
+@router.websocket("/ws")
+async def withdrawals_ws(websocket: WebSocket, token: str):
+    # Same shape as deposits.py's own /deposits/ws — see
+    # withdrawal_service._publish_status_update's docstring for what gets
+    # published here (a bare {"withdrawal_id", "status"} on every admin
+    # approve/reject) and user_id_from_ws_token's docstring for why the
+    # token travels as a query param instead of an Authorization header.
+    # WithdrawPage.jsx doesn't actually need the payload's contents — it
+    # just refetches its whole list on any message, same as
+    # UnlockFeeCard.jsx's polling already does — so this never needs richer
+    # payloads even if more status transitions get published later.
+    await websocket.accept()
+
+    user_id = await user_id_from_ws_token(token)
+    if user_id is None:
+        await websocket.close(code=4401)
+        return
+
+    r = get_redis()
+    pubsub = r.pubsub()
+    channel = f"withdrawal_updates:{user_id}"
+    await pubsub.subscribe(channel)
+
+    try:
+        async for message in pubsub.listen():
+            if message["type"] != "message":
+                continue
+            await websocket.send_text(message["data"])
+    except Exception:
+        pass
+    finally:
+        await pubsub.unsubscribe(channel)
+        await pubsub.close()

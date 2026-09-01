@@ -248,6 +248,8 @@ const resources = {
           confirmCancel: 'Cancel',
           confirmSubmit: 'Confirm & create',
           success: 'Bot created.',
+          limitReachedTitle: 'Daily limit reached',
+          limitReachedBody: 'You’ve configured {{limit}} bot session(s) today: the most a free account can create per day. Try again tomorrow, or ask an admin to raise your daily limit.',
         },
       },
       admin: {

@@ -273,50 +273,53 @@ def _estimate_transfer_energy(from_address: str, to_address: str, raw_amount: in
 
 
 _ENERGY_ORDER_POLL_SECONDS = 2
-_ENERGY_ORDER_MAX_ATTEMPTS = 15  # ~30s of polling — real orders seen so far settle in 3-6s
+_ENERGY_ORDER_MAX_ATTEMPTS = 15  # ~30s of polling — real orders seen so far settle in 6-7s
 
-# Every GetBlock order status observed live so far that means "not done
-# yet, keep polling" — NOT the full set GetBlock's API is documented to
-# use (their docs don't actually enumerate one). Found by real production
-# failures, not by reading documentation: "accepted" first, then "pending"
-# a little later, before settling into "charged" (success) — see
-# _poll_energy_order's docstring for the incident each one caused. If a
-# future order ever settles into some other never-seen-before status,
-# _poll_energy_order will (correctly) treat it as terminal and let
-# _rent_energy's own "not == charged" check decide whether that's a real
-# failure — but if that new status turns out to ALSO just be "not done
-# yet," add it here rather than everyone re-learning this the expensive way.
-_TRANSIENT_ORDER_STATUSES = {"accepted", "pending"}
+# The ONE order status confirmed, live, to mean "done, successfully
+# charged, Energy delegated" — see _poll_energy_order's docstring for why
+# this is the ONLY status this module treats as a reason to stop polling
+# early, rather than trying to enumerate every status that means "not done
+# yet." GetBlock's docs don't document their order-status lifecycle at all;
+# everything known about it here came from real production incidents.
+_ENERGY_ORDER_SUCCESS_STATUS = "charged"
 
 
 def _poll_energy_order(order_id: str) -> dict:
-    """Polls GET /orders/{order_id} until it leaves the transient
-    "accepted" state. Exists because of a real discrepancy between
-    GetBlock's docs and its actual live behavior, found on this codebase's
-    first real rental: the docs claim delegate-energy "completes
-    immediately" with a status=="success" response, but the real response
-    instead comes back status=="accepted" (order placed, not yet settled),
-    empty txid/price_usd, settling into status=="charged" — their actual
-    terminal-success value, never "success" — moments later once payment
-    and delegation both complete. Treating that first "accepted" response
-    as an outright failure was the exact first bug this function fixes: it
-    aborted a sweep whose Energy had, in fact, already been rented and
-    charged for, wasting that real charge since the sweep never got to use
-    the Energy it had just paid for.
+    """Polls GET /orders/{order_id} until it reaches _ENERGY_ORDER_SUCCESS_
+    STATUS ("charged") or the poll window runs out. Exists because of a
+    real discrepancy between GetBlock's docs and its actual live behavior:
+    the docs claim delegate-energy "completes immediately" with a
+    status=="success" response, but the real response instead comes back
+    status=="accepted" (order placed, not yet settled), empty txid/
+    price_usd, settling into status=="charged" — their actual terminal-
+    success value, never "success" — moments later once payment and
+    delegation both complete.
 
-    A SECOND, related bug found live in production shortly after: the order
-    lifecycle isn't just accepted -> charged, there's at least one more
-    transient state in between — status=="pending" — which the original
-    version of this function treated as terminal (anything not "accepted"
-    was returned immediately, including "pending"), causing the exact same
-    real-charge-wasted failure mode all over again. Confirmed directly
-    against a real order: created at 20:18:02Z with status "pending" moments
-    later, settled to "charged" at 20:18:08Z — just 6 seconds later, well
-    within reach of a slightly more patient poll. Both "accepted" and
-    "pending" are now treated as "keep polling," not just "accepted" — if
-    GetBlock's real API ever surfaces yet another transient status name,
-    the safest fix is adding it to _TRANSIENT_ORDER_STATUSES below, not
-    trying to enumerate every known-safe terminal one.
+    This function went through two earlier, narrower versions, each fixing
+    one real production incident and each getting bitten by the next one:
+    v1 special-cased only "accepted" as transient (everything else,
+    including a later-discovered "pending" state, was wrongly treated as
+    failure). v2 added "pending" to an explicit transient-status allowlist
+    — and got bitten by a THIRD, still-different transient status,
+    "processing", within the same evening. All three incidents had the
+    identical shape: a real charge succeeded (confirmed via GET /orders/
+    {id} showing status=="charged" with a real txid, moments after this
+    function had already given up) that the sweep never got to use, because
+    the polling logic didn't recognize the specific word GetBlock happened
+    to use for "still working on it" that time.
+
+    The actual lesson from three repeats: enumerating "transient" statuses
+    is the wrong shape of fix, since GetBlock evidently has more of them
+    than any one incident reveals. This version inverts the check instead —
+    "charged" is the only value that ends polling early; every other status
+    string, known or not, keeps polling until the window runs out. The
+    failure mode this trades away in return: a GENUINE terminal failure
+    (say, insufficient GetBlock balance) now takes the full ~30s to report
+    instead of failing fast, since there's no way to distinguish "still
+    processing" from "actually failed" without knowing GetBlock's real
+    failure-status vocabulary either. That trade is deliberate — a slower
+    failure costs a few seconds; a falsely-declared one costs a real,
+    already-spent charge, exactly like all three incidents above.
     """
     for _ in range(_ENERGY_ORDER_MAX_ATTEMPTS):
         resp = httpx.get(
@@ -326,11 +329,11 @@ def _poll_energy_order(order_id: str) -> dict:
         )
         resp.raise_for_status()
         data = resp.json().get("data", {})
-        if data.get("status") not in _TRANSIENT_ORDER_STATUSES:
+        if data.get("status") == _ENERGY_ORDER_SUCCESS_STATUS:
             return data
         time.sleep(_ENERGY_ORDER_POLL_SECONDS)
     raise EnergyRentalFailed(
-        f"GetBlock order {order_id} did not settle within the poll window — still {data.get('status')!r}"
+        f"GetBlock order {order_id} did not reach {_ENERGY_ORDER_SUCCESS_STATUS!r} within the poll window — last seen: {data.get('status')!r}"
     )
 
 
@@ -374,14 +377,19 @@ def _rent_energy(deposit_address: str, energy_amount: int) -> dict:
         raise EnergyRentalFailed(f"GetBlock energy rental request failed: {exc}") from exc
 
     data = resp.json().get("data", {})
-    if data.get("status") == "accepted":
-        # Real field name from the POST response is "orderId" (camelCase)
-        # — inconsistent with the GET /orders/{id} response's own "id"
-        # field for the same value, but that's genuinely what each endpoint
-        # returns, not a typo here.
+    if data.get("status") != _ENERGY_ORDER_SUCCESS_STATUS:
+        # Real field name from the POST response is "orderId" (camelCase) —
+        # inconsistent with the GET /orders/{id} response's own "id" field
+        # for the same value, but that's genuinely what each endpoint
+        # returns, not a typo here. Polls regardless of which specific
+        # non-charged status this first response happens to show — matching
+        # only one particular status string here (originally just
+        # "accepted") was the exact shape of bug that took three separate
+        # real incidents to fully shake out; see _poll_energy_order's
+        # docstring for the full history.
         data = _poll_energy_order(data["orderId"])
 
-    if data.get("status") != "charged":
+    if data.get("status") != _ENERGY_ORDER_SUCCESS_STATUS:
         raise EnergyRentalFailed(f"GetBlock energy rental did not succeed: {data}")
 
     logger.info(

@@ -271,6 +271,40 @@ def run_sweep_now(admin: dict = Depends(get_current_admin)):
     )
 
 
+@router.post("/sweeps/run/{wallet_id}", response_model=SweepNowResponse)
+def run_sweep_one(wallet_id: str, admin: dict = Depends(get_current_admin)):
+    # The single-deposit counterpart to run_sweep_now above — queues just
+    # ONE wallet's sweep rather than every pending one, since each sweep
+    # now costs real money (GetBlock Energy rental) and an admin shouldn't
+    # have to pay to consolidate everything just to move one urgent
+    # deposit. Same response shape as the bulk endpoint (a list, just
+    # always length 1) so the frontend doesn't need a second response type.
+    try:
+        queued = custody_service.trigger_sweep_one(wallet_id)
+    except custody_service.WalletNotPending as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    log_admin_action(
+        admin_id=admin["id"],
+        action="SWEEP_NOW_TRIGGERED",
+        target_type="sweeps",
+        target_id=wallet_id,
+        metadata={"count": 1, "wallet_ids": [wallet_id]},
+    )
+    return SweepNowResponse(
+        queued=[
+            QueuedSweepEntry(
+                wallet_id=queued["wallet_id"],
+                network=queued["network"],
+                asset=queued["asset"],
+                deposit_address=queued["deposit_address"],
+                balance=str(queued["balance"]),
+                task_id=queued["task_id"],
+            )
+        ]
+    )
+
+
 @router.get("/sweeps", response_model=SweepHistoryResponse)
 def sweep_history(admin: dict = Depends(get_current_admin)):
     sweeps = custody_service.list_recent_sweeps()

@@ -17,14 +17,17 @@
 import logging
 import secrets
 import time
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
+import httpx
 from eth_account import Account
 from eth_account.messages import encode_typed_data
 from tronpy import Tron
+from tronpy.abi import trx_abi
 from tronpy.exceptions import AddressNotFound, TransactionNotFound
-from tronpy.keys import PrivateKey, is_base58check_address
+from tronpy.keys import PrivateKey, is_base58check_address, to_hex_address
 from tronpy.providers import HTTPProvider
 from web3 import Web3
 from web3.exceptions import TimeExhausted
@@ -188,6 +191,184 @@ def set_consolidation_address(network_code: str, address: str, admin_id: str) ->
 
 # ── Tron sweep (Module 2) ────────────────────────────────────────────────────
 
+# ── Energy provisioning via GetBlock rental — what the live sweep flow
+# actually uses (see sweep_tron_usdt_deposit below). The self-staked
+# alternative further down (stake_gas_wallet/_delegate_energy/
+# _undelegate_energy/TRON_ENERGY_DELEGATION_TRX) is left in place, dormant,
+# not deleted — it's not broken, and the 12 TRX already staked through it
+# is real money — but it turned out impractical: verified live via
+# _estimate_transfer_energy below, a single real mainnet USDT transfer
+# needs on the order of 130,000+ Energy (Tron's Dynamic Energy Model
+# inflates heavily-used contracts like USDT well above generic-TRC20
+# estimates), which would need roughly 2,000+ TRX self-staked to cover —
+# not practical to lock up at this project's scale. GetBlock's pay-as-you
+# -go rental (a few TRX-equivalent per transfer) is what's actually used
+# instead. See config.py's getblock_energy_api_key comment for the account
+# setup, and https://docs.getblock.io/tron-energy/ for their API docs.
+
+GETBLOCK_ENERGY_BASE_URL = "https://services.getblock.io/v1/tron-energy"
+
+# Safety margin over the EXACT Energy cost _estimate_transfer_energy
+# measures via a free on-chain simulation, in case the real broadcast needs
+# marginally more than predicted (e.g. a minor state change between
+# simulating and broadcasting). Cheap insurance: a 15% overshoot costs a
+# few extra TRX-cents in rental, while an undershoot fails the whole sweep
+# attempt outright with OUT_OF_ENERGY and wastes the rental already paid
+# for, needing a full retry (another rental purchase) regardless.
+ENERGY_ESTIMATE_SAFETY_MARGIN = Decimal("1.15")
+
+
+class EnergyRentalFailed(RuntimeError):
+    """Raised when renting Energy via GetBlock fails — a missing/bad API
+    key, insufficient GetBlock account balance, a network error, or
+    GetBlock itself reporting a non-success status. Always raised before
+    any USDT has moved, so this is a safe-fail exactly like
+    ConsolidationNotConfigured/GasWalletNotConfigured below — the sweep
+    just needs retrying later (after funding the GetBlock account, if
+    that's why)."""
+
+
+def _estimate_transfer_energy(from_address: str, to_address: str, raw_amount: int) -> int:
+    """Simulates the real TRC-20 transfer via TronGrid's
+    triggerconstantcontract (free, read-only, no on-chain effect or cost)
+    to find EXACTLY how much Energy THIS specific transfer will cost.
+    Discovered live that a flat assumed constant (this codebase's original
+    ~1.5 TRX estimate, still visible in stake_gas_wallet's history) is
+    nowhere close to correct for real mainnet USDT: Tron's Dynamic Energy
+    Model inflates heavily-used contracts like USDT well above generic-
+    TRC20 baselines, and a transfer to a recipient that's never held this
+    token before costs roughly double a transfer to an existing holder.
+    Always measuring fresh rather than assuming a constant is what makes
+    renting close to exactly enough Energy — not wildly too little, which
+    fails with OUT_OF_ENERGY, or wildly too much, which wastes real money —
+    reliable regardless of which of those factors is in play for a given
+    sweep. See ENERGY_ESTIMATE_SAFETY_MARGIN above for the buffer applied
+    on top of this function's return value before actually renting.
+    """
+    cfg = NETWORK_CONFIG["TRC20"]
+    parameter = trx_abi.encode(["address", "uint256"], [to_hex_address(to_address), raw_amount]).hex()
+
+    resp = httpx.post(
+        f"{settings.trongrid_base_url}/wallet/triggerconstantcontract",
+        json={
+            "owner_address": to_hex_address(from_address),
+            "contract_address": to_hex_address(cfg["contract_address"]),
+            "function_selector": "transfer(address,uint256)",
+            "parameter": parameter,
+            "visible": False,
+        },
+        headers={"TRON-PRO-API-KEY": settings.trongrid_api_key},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    if not data.get("result", {}).get("result"):
+        raise RuntimeError(f"Energy simulation for {from_address} -> {to_address} did not succeed: {data}")
+
+    # energy_penalty (Tron's surcharge for callers relying on delegated/
+    # rented rather than self-owned Energy) isn't always present — 0 when
+    # absent, same "no penalty this time" outcome either way.
+    return data["energy_used"] + data.get("energy_penalty", 0)
+
+
+_ENERGY_ORDER_POLL_SECONDS = 2
+_ENERGY_ORDER_MAX_ATTEMPTS = 15  # ~30s of polling — this codebase's first real order settled in ~3s
+
+
+def _poll_energy_order(order_id: str) -> dict:
+    """Polls GET /orders/{order_id} until it leaves the transient
+    "accepted" state. Exists because of a real discrepancy between
+    GetBlock's docs and its actual live behavior, found on this codebase's
+    first real rental: the docs claim delegate-energy "completes
+    immediately" with a status=="success" response, but the real response
+    instead comes back status=="accepted" (order placed, not yet settled),
+    empty txid/price_usd, settling into status=="charged" — their actual
+    terminal-success value, never "success" — moments later once payment
+    and delegation both complete. Treating that first "accepted" response
+    as an outright failure was the exact bug this function fixes: it
+    aborted a sweep whose Energy had, in fact, already been rented and
+    charged for, wasting that real charge since the sweep never got to use
+    the Energy it had just paid for.
+    """
+    for _ in range(_ENERGY_ORDER_MAX_ATTEMPTS):
+        resp = httpx.get(
+            f"{GETBLOCK_ENERGY_BASE_URL}/orders/{order_id}",
+            headers={"Authorization": f"Bearer {settings.getblock_energy_api_key}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data", {})
+        if data.get("status") != "accepted":
+            return data
+        time.sleep(_ENERGY_ORDER_POLL_SECONDS)
+    raise EnergyRentalFailed(f"GetBlock order {order_id} did not settle within the poll window — still 'accepted'")
+
+
+def _rent_energy(deposit_address: str, energy_amount: int) -> dict:
+    """Rents energy_amount Energy from GetBlock's Energy Rental market,
+    delegated directly to deposit_address for 1 hour — comfortably longer
+    than a single sweep takes to complete, short enough not to pay for
+    capacity that outlives its use.
+
+    NOT actually synchronous despite GetBlock's own docs claiming it is —
+    see _poll_energy_order's docstring for the real observed behavior this
+    works around. Returns the final order dict once status=="charged".
+    Raises EnergyRentalFailed for a genuine failure or an order that never
+    settles — see that exception's docstring for why every raise here is
+    safe to retry (a raise here always means either no charge happened, or
+    the charge is directly visible in what's logged below for manual
+    follow-up, never a silent unaccounted-for charge).
+    """
+    if not settings.getblock_energy_api_key:
+        raise EnergyRentalFailed("GETBLOCK_ENERGY_API_KEY is not configured — see .env.example")
+
+    try:
+        resp = httpx.post(
+            f"{GETBLOCK_ENERGY_BASE_URL}/delegate-energy",
+            headers={
+                "Authorization": f"Bearer {settings.getblock_energy_api_key}",
+                "Content-Type": "application/json",
+                # Recommended by GetBlock so a retried HTTP request (e.g.
+                # this call's own response timing out even though GetBlock
+                # received it) can never be double-charged — a fresh UUID
+                # per attempt, not reused across retries of the same logical
+                # sweep, so an intentional retry after a genuine failure
+                # still pays for a genuinely new rental, exactly as it should.
+                "Idempotency-Key": str(uuid.uuid4()),
+            },
+            json={"target_address": deposit_address, "volume": energy_amount, "duration": "1h"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise EnergyRentalFailed(f"GetBlock energy rental request failed: {exc}") from exc
+
+    data = resp.json().get("data", {})
+    if data.get("status") == "accepted":
+        # Real field name from the POST response is "orderId" (camelCase)
+        # — inconsistent with the GET /orders/{id} response's own "id"
+        # field for the same value, but that's genuinely what each endpoint
+        # returns, not a typo here.
+        data = _poll_energy_order(data["orderId"])
+
+    if data.get("status") != "charged":
+        raise EnergyRentalFailed(f"GetBlock energy rental did not succeed: {data}")
+
+    logger.info(
+        "Rented %s Energy from GetBlock for %s (cost: $%s, order=%s, txid=%s)",
+        energy_amount, deposit_address, data.get("price_usd"), data.get("id"), data.get("txid"),
+    )
+    return data
+
+
+# ── Self-staked Energy delegation — DORMANT, superseded by GetBlock rental
+# above. Left in place (not deleted) because it's not broken and the TRX
+# already staked through stake_gas_wallet is real; sweep_tron_usdt_deposit
+# no longer calls anything below this point, though — see the GetBlock
+# section's header comment for the full story of why this stopped being
+# what's actually used. ─────────────────────────────────────────────────────
+
 # How much TRX-equivalent to delegate for Energy per sweep. Padding over
 # the ~1.5 TRX a standard USDT transfer actually burns at the current ~100
 # sun/energy price (see the architecture doc's "How a sweep moves funds"
@@ -269,60 +450,84 @@ def stake_gas_wallet(trx_amount: Decimal) -> str:
     return txn.txid
 
 
-# How much TRX to send a deposit address the very first time it's ever
-# swept — ONLY when Tron's own native account registry has no record of it
-# yet (see _ensure_account_activated below). This is separate from, and on
-# top of, the ~1 TRX network fee Tron charges the SENDER (not the
-# recipient) to create a brand-new account (getCreateNewAccountFeeInSystem
-# Contract — checked live against TronGrid's own chain parameters, not
-# assumed, given real gas-wallet TRX pays for this). The deposit address
-# itself doesn't actually need this TRX for anything — Energy is delegated
-# to it separately for the sweep, and every activated Tron account gets a
-# small free daily bandwidth allowance, plenty for one transfer — so this
-# is deliberately minimal, just enough to trigger account creation, not a
-# working balance. Raise this only if evidence ever shows the free daily
-# bandwidth allowance isn't enough on its own.
-TRON_ACCOUNT_ACTIVATION_TRX = Decimal("0.1")
+# How much TRX a deposit address needs to have SITTING ON IT before a
+# sweep can broadcast successfully — topped up to this amount (not by this
+# amount) at the start of every sweep attempt, whether the address has
+# never been touched or has been swept before. Covers two separate real
+# costs discovered live, the hard way, across this codebase's actual first
+# mainnet sweeps, not assumed from documentation:
+#
+#   1. Tron account creation. A deposit address that's only ever received
+#      USDT (never any native TRX) has no entry in Tron's native account
+#      registry at all — that's a completely separate thing from the TRC-20
+#      contract's own internal balance mapping, which the deposit address
+#      DOES appear in the moment it receives a deposit. Energy delegation
+#      (whether self-staked or, now, GetBlock-rented — see _rent_energy)
+#      requires the TARGET account to already exist in that native
+#      registry, and fails outright with "Account not exists" otherwise.
+#      Sending ANY native TRX transfer to a not-yet-existing address is
+#      what creates its account record — there's a real ~1 TRX network fee
+#      for this too, but that's charged to the SENDER (the gas wallet), not
+#      deducted from the amount that lands on the deposit address.
+#
+#   2. The sweep transaction's own bandwidth. Once the account exists, its
+#      free daily bandwidth allowance (~600 points) is NOT enough on its
+#      own for a USDT transfer (~345 points needed) once even a little of
+#      that allowance has already been spent (e.g. an earlier failed
+#      attempt from the same address) — and Tron's bandwidth fallback isn't
+#      "burn just the marginal shortfall," it's "burn for the WHOLE
+#      transaction" once free bandwidth can't fully cover it. A real
+#      successful sweep on this codebase burned exactly 345,000 sun (0.345
+#      TRX) this way — verified directly from that transaction's own
+#      receipt, not estimated. A too-small top-up (0.1 TRX was tried first)
+#      fails with BANDWIDTH_ERROR right at the final broadcast step, after
+#      Energy has already been rented and paid for — an expensive way to
+#      fail, which is exactly why this is now generously padded rather than
+#      minimal: 1 TRX comfortably covers the real 0.345 TRX cost with
+#      margin for the bandwidth price or transaction shape ever shifting
+#      slightly, at a cost of a fraction of a cent more per sweep than the
+#      bare minimum would be.
+TRON_ACCOUNT_READY_TRX = Decimal("1")
 
 
-def _ensure_account_activated(deposit_address: str) -> None:
-    """Tron keeps two separate notions of "does this address exist": a
-    TRC-20 token contract's own internal balance mapping (where a deposit
-    address can hold a real, spendable USDT balance without ever appearing
-    here), and Tron's native account registry (which DelegateResourceContract
-    — the Energy delegation _delegate_energy performs right before every
-    sweep — requires the TARGET account to already be present in). A
-    deposit address that has only ever received USDT, never any native TRX,
-    has no native account record at all, so delegating Energy to it fails
-    outright with "Account not exists" — found live, the hard way, on this
-    codebase's very first real mainnet sweep attempt, since every deposit
-    address is designed to start at zero TRX.
+def _ensure_account_ready(deposit_address: str) -> None:
+    """Tops a deposit address up to TRON_ACCOUNT_READY_TRX worth of native
+    TRX if it currently has less — covers BOTH account creation (an
+    address that's never existed natively at all) AND topping up an
+    address that exists but has been drained below the working amount
+    (e.g. a PREVIOUS sweep attempt's own fee already spent what little TRX
+    it had, which is exactly what happened on this codebase's first real
+    sweep and caused a second round of BANDWIDTH_ERROR failures even after
+    the account existed). Treating "exists but underfunded" and "doesn't
+    exist yet" as the same case — top up to the target either way — is
+    what makes this safe to call unconditionally at the start of every
+    sweep attempt, not just the very first one for a given address.
 
-    Sending a deposit address ANY native TRX transfer is exactly what
-    creates its Tron account record, so this just does that — a safe no-op
-    (does nothing, costs nothing) if the account already exists (e.g. a
-    returning user's second-ever deposit), via client.get_account() raising
-    tronpy's AddressNotFound only for a genuinely untouched address. Safe to
-    call unconditionally at the start of every sweep rather than needing a
-    separate "is this a first sweep" flag anywhere.
+    A no-op (no transfer, no fee) if the address already has enough — reads
+    the real on-chain balance every time rather than assuming a past
+    top-up is still intact, since a previous failed sweep attempt could
+    have spent some of it.
     """
     client = _tron_client()
+    target_sun = int(TRON_ACCOUNT_READY_TRX * 1_000_000)
 
     try:
-        client.get_account(deposit_address)
-        return  # already activated — nothing to do
+        current_sun = client.get_account(deposit_address).get("balance", 0)
     except AddressNotFound:
-        pass
+        current_sun = 0  # doesn't exist yet at all — same treatment as "exists but empty"
+
+    if current_sun >= target_sun:
+        return  # already has enough — nothing to do
 
     key = _gas_wallet_key()
     owner = key.public_key.to_base58check_address()
-    amount_sun = int(TRON_ACCOUNT_ACTIVATION_TRX * 1_000_000)
+    top_up_sun = target_sun - current_sun
 
-    txn = client.trx.transfer(owner, deposit_address, amount_sun).build().sign(key)
+    txn = client.trx.transfer(owner, deposit_address, top_up_sun).build().sign(key)
     txn.broadcast()
     logger.info(
-        "Activated previously-untouched Tron account %s (sent %s TRX from gas wallet, tx=%s)",
-        deposit_address, TRON_ACCOUNT_ACTIVATION_TRX, txn.txid,
+        "Topped up %s (had %s sun, sent %s sun to reach %s TRX target, tx=%s)",
+        deposit_address, current_sun, top_up_sun, TRON_ACCOUNT_READY_TRX, txn.txid,
     )
     _wait_for_confirmation(client, txn.txid)
 
@@ -471,23 +676,37 @@ def sweep_tron_usdt_deposit(wallet_row: dict) -> dict:
     sweep_id = sweep_row["id"]
 
     try:
-        # Must happen before delegation — see _ensure_account_activated's
-        # docstring for why a never-before-touched deposit address (every
-        # address, the first time it's ever swept) makes delegation fail
-        # outright otherwise. A no-op for a returning address.
-        _ensure_account_activated(deposit_address)
+        # Must happen before renting Energy AND before the final transfer
+        # broadcast — see _ensure_account_ready's docstring for the two
+        # separate real failures this prevents (no native account yet, and
+        # not enough TRX on the address to cover its own transfer's
+        # bandwidth burn), both found live on this codebase's actual first
+        # mainnet sweeps. A no-op if the address already has enough.
+        _ensure_account_ready(deposit_address)
 
-        resource_tx = _delegate_energy(deposit_address)
-        get_supabase().table("sweeps").update({"resource_tx_hash": resource_tx}).eq("id", sweep_id).execute()
+        cfg = NETWORK_CONFIG["TRC20"]
+        raw_amount = int(balance * (10 ** cfg["decimals"]))
+
+        # Measure exactly how much Energy THIS transfer needs, then rent
+        # that much from GetBlock rather than self-staking — see
+        # config.py's getblock_energy_api_key comment and this module's git
+        # history for why: the original self-staked design
+        # (stake_gas_wallet/_delegate_energy below, left in place but
+        # dormant) turned out to need roughly 2,000+ TRX staked to cover a
+        # single real mainnet USDT transfer, discovered live via this exact
+        # simulation call returning ~130k Energy for this contract, well
+        # above generic-TRC20 assumptions.
+        simulated_energy = _estimate_transfer_energy(deposit_address, destination, raw_amount)
+        energy_needed = max(30_000, int(simulated_energy * ENERGY_ESTIMATE_SAFETY_MARGIN))
+        rental = _rent_energy(deposit_address, energy_needed)
+        get_supabase().table("sweeps").update({"resource_tx_hash": rental.get("txid")}).eq("id", sweep_id).execute()
 
         # Re-derived on the spot, used immediately, then allowed to fall out
         # of scope — never stored, never logged. See wallet_service.derive_private_key.
         priv_key = PrivateKey(wallet_service.derive_private_key("TRC20", wallet_row["derivation_index"]))
 
         client = _tron_client()
-        cfg = NETWORK_CONFIG["TRC20"]
         contract = client.get_contract(cfg["contract_address"])
-        raw_amount = int(balance * (10 ** cfg["decimals"]))
 
         txn = (
             contract.functions.transfer(destination, raw_amount)
@@ -511,7 +730,9 @@ def sweep_tron_usdt_deposit(wallet_row: dict) -> dict:
                     "confirmed_at": datetime.now(tz=timezone.utc).isoformat(),
                 }
             ).eq("id", sweep_id).execute()
-            _undelegate_energy(deposit_address)
+            # No undelegate step needed here (unlike the old self-staked
+            # design) — rented Energy belongs to GetBlock's pool, not ours;
+            # it simply expires at the end of its rented duration on its own.
             logger.info("Swept %s USDT from wallet %s to %s (tx=%s)", balance, wallet_id, destination, txn.txid)
             return {"status": "confirmed", "sweep_id": sweep_id, "amount": balance, "tx_hash": txn.txid}
 
@@ -522,24 +743,6 @@ def sweep_tron_usdt_deposit(wallet_row: dict) -> dict:
         return {"status": "failed", "sweep_id": sweep_id, "tx_hash": txn.txid}
 
     except Exception as exc:
-        # Best-effort reclaim of any Energy that was successfully delegated
-        # earlier in THIS attempt before it failed at a later step — a real
-        # gap found live: a sweep that fails after _delegate_energy succeeds
-        # but before the sweep completes used to leave that delegation
-        # permanently outstanding, since _undelegate_energy was previously
-        # only ever called on the success path above — silently eating into
-        # the gas wallet's available FreezeEnergyV2 balance with every such
-        # failure, until a LATER, unrelated sweep attempt fails with
-        # "delegateBalance must be less than or equal to available
-        # FreezeEnergyV2 balance" and nothing about that error points back
-        # at the real cause. Safe to call unconditionally here even when
-        # delegation never actually happened in this attempt (e.g. a
-        # failure before _delegate_energy was ever reached) —
-        # _undelegate_energy already swallows its own failures internally,
-        # so an undelegate for an amount that was never delegated just fails
-        # quietly inside that function, never raising here.
-        _undelegate_energy(deposit_address)
-
         get_supabase().table("sweeps").update(
             {"status_id": _sweep_status_id("FAILED"), "error_message": str(exc)}
         ).eq("id", sweep_id).execute()
@@ -936,6 +1139,78 @@ def trigger_sweep_now() -> list[dict]:
             task = sweep_evm_wallet.delay(item["wallet_id"], item["network"])
         queued.append({**item, "task_id": task.id})
     return queued
+
+
+class WalletNotPending(RuntimeError):
+    """Raised by trigger_sweep_one when the wallet it's asked to sweep
+    isn't actually a valid pending-sweep candidate right now — no such
+    wallet, no real on-chain balance worth sweeping, or a sweep for it is
+    already in flight. Re-validated fresh here rather than trusting
+    whatever the admin panel's browser last rendered, same "never trust
+    cached state" principle list_pending_sweeps()/trigger_sweep_now() both
+    already follow — the admin could click a per-row "Sweep" button on a
+    stale page long after that row's real state changed."""
+
+
+def trigger_sweep_one(wallet_id: str) -> dict:
+    """Queues a consolidation sweep for exactly ONE wallet, admin-chosen —
+    the single-deposit counterpart to trigger_sweep_now()'s "sweep
+    everything pending at once" behavior. Exists because every sweep costs
+    real money now (GetBlock Energy rental, see _rent_energy above) —
+    letting an admin consolidate one cheap, urgent deposit without paying
+    to sweep every other pending one in the same click is the whole point.
+
+    Re-validates this wallet the same way list_pending_sweeps() validates
+    every candidate (real on-chain balance above the dust threshold, no
+    sweep already in flight) before queuing anything — raises
+    WalletNotPending rather than silently queuing a sweep for a wallet
+    that turns out to be empty or mid-sweep already. Returns the same
+    shape as one entry from trigger_sweep_now()'s return list.
+    """
+    from app.workers.consolidate_deposits import sweep_evm_wallet, sweep_tron_wallet
+
+    rows = (
+        get_supabase()
+        .table("wallets")
+        .select("id,network_id,deposit_address")
+        .eq("id", wallet_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not rows:
+        raise WalletNotPending(f"No wallet found with id {wallet_id}")
+    wallet = rows[0]
+    network_code = _network_code_by_id().get(wallet["network_id"])
+    if network_code is None:
+        raise WalletNotPending(f"Wallet {wallet_id} has an unrecognized network_id {wallet['network_id']}")
+
+    if _existing_in_flight_sweep(wallet_id) is not None:
+        raise WalletNotPending(f"Wallet {wallet_id} already has a sweep in flight")
+
+    if network_code == "TRC20":
+        balance = get_tron_usdt_balance(wallet["deposit_address"])
+        threshold = TRON_SWEEP_DUST_THRESHOLD
+    else:
+        balance = get_evm_usdc_balance(network_code, wallet["deposit_address"])
+        threshold = EVM_SWEEP_DUST_THRESHOLD
+
+    if balance < threshold:
+        raise WalletNotPending(f"Wallet {wallet_id} has no sweepable on-chain balance right now ({balance})")
+
+    if network_code == "TRC20":
+        task = sweep_tron_wallet.delay(wallet_id)
+    else:
+        task = sweep_evm_wallet.delay(wallet_id, network_code)
+
+    return {
+        "wallet_id": wallet_id,
+        "network": network_code,
+        "asset": _ASSET_BY_NETWORK[network_code],
+        "deposit_address": wallet["deposit_address"],
+        "balance": balance,
+        "task_id": task.id,
+    }
 
 
 def list_recent_sweeps(limit: int = 50) -> list[dict]:

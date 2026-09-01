@@ -62,5 +62,25 @@ class Settings(BaseSettings):
     # from a faucet for dev. Raw hex private key. See custody_service.py.
     evm_relayer_private_key: str = ""
 
+    # GetBlock Energy Rental API key (TRC-20 sweep gas provisioning) — pays,
+    # per-transfer, to have Energy delegated directly to a deposit address
+    # from GetBlock's own pool, rather than this app maintaining its own
+    # staked TRX pool. Replaces the original self-staked-and-delegated
+    # design (custody_service.py's stake_gas_wallet/_delegate_energy,
+    # TRON_GAS_WALLET_PRIVATE_KEY) for the actual sweep flow — that
+    # self-staking code is left in place, dormant, rather than deleted,
+    # since it's not broken and the TRX already staked through it is real;
+    # it just turned out to need roughly 2,000+ TRX staked to cover one
+    # real mainnet USDT transfer's actual Energy cost (Tron's Dynamic
+    # Energy Model inflates heavily-used contracts like USDT well above
+    # generic-TRC20 estimates — discovered live, not assumed), which isn't
+    # practical to self-fund at this project's scale. GetBlock's pay-as-you
+    # -go pricing (a few TRX-equivalent per transfer, see custody_service
+    # .py's _rent_energy) is what the live sweep flow actually uses now.
+    # Get this from GetBlock's dashboard under the TRON Energy product
+    # specifically (NOT their general node-hosting product, which is a
+    # separate signup flow with unrelated "shared node / CU" terminology).
+    getblock_energy_api_key: str = ""
+
 
 settings = Settings()

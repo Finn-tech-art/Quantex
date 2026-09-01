@@ -397,6 +397,7 @@ const resources = {
           pendingEmpty: 'Nothing waiting to be swept right now.',
           runButton: 'Sweep now',
           running: 'Sweeping…',
+          sweepOneButton: 'Sweep',
           runNotice: 'Queues one sweep per address below — each can take up to about 90 seconds to confirm on-chain. Refresh history to watch progress.',
           queuedNotice: '{{count}} sweep(s) queued.',
           historyTitle: 'Recent sweeps',

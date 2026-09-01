@@ -15,7 +15,7 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import AdminNav from "../components/AdminNav";
 import AnimatedPsi from "../components/AnimatedPsi";
 import { ErrorText, PrimaryButton } from "../components/FormControls";
-import { generateOperationalWallet, getPendingSweeps, getSweepHistory, runSweepNow } from "../lib/api";
+import { generateOperationalWallet, getPendingSweeps, getSweepHistory, runSweepNow, runSweepOne } from "../lib/api";
 
 const STATUS_KEY = {
   PENDING: "statusPending",
@@ -41,6 +41,14 @@ export default function AdminSweepsPage() {
   const [running, setRunning] = useState(false);
   const [queuedCount, setQueuedCount] = useState(null);
 
+  // Per-row "Sweep just this one" state — separate from the bulk run's
+  // state above so sweeping one address never touches the bulk button's
+  // own loading/error/success display, and vice versa. runningWalletId
+  // tracks at most one in-flight single-sweep click at a time (each row's
+  // button disables itself while its own wallet_id is the one running).
+  const [runningWalletId, setRunningWalletId] = useState(null);
+  const [oneError, setOneError] = useState(null);
+
   function refresh() {
     if (!adminToken) return;
     getPendingSweeps(adminToken).then((res) => setPending(res.pending));
@@ -61,6 +69,19 @@ export default function AdminSweepsPage() {
       setError(err.message);
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handleRunOne(walletId) {
+    setOneError(null);
+    setRunningWalletId(walletId);
+    try {
+      await runSweepOne(adminToken, walletId);
+      refresh(); // this one wallet should now drop out of the pending list
+    } catch (err) {
+      setOneError(err.message);
+    } finally {
+      setRunningWalletId(null);
     }
   }
 
@@ -88,7 +109,13 @@ export default function AdminSweepsPage() {
 
         <OperationalWalletsSection adminToken={adminToken} t={t} />
 
-        <PendingSection pending={pending} t={t} />
+        <PendingSection
+          pending={pending}
+          t={t}
+          onSweepOne={handleRunOne}
+          runningWalletId={runningWalletId}
+          oneError={oneError}
+        />
 
         {pending !== null && pending.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
@@ -220,7 +247,7 @@ function KeyRow({ label, value }) {
   );
 }
 
-function PendingSection({ pending, t }) {
+function PendingSection({ pending, t, onSweepOne, runningWalletId, oneError }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       <span style={{ fontFamily: "var(--font-data)", fontSize: "9px", letterSpacing: "0.08em", color: "var(--ink-soft)" }}>
@@ -260,9 +287,32 @@ function PendingSection({ pending, t }) {
             <span style={{ fontFamily: "var(--font-data)", fontSize: "9.5px", color: "var(--ink-soft)", wordBreak: "break-all" }}>
               {item.deposit_address}
             </span>
+            <button
+              type="button"
+              onClick={() => onSweepOne(item.wallet_id)}
+              disabled={runningWalletId !== null}
+              style={{
+                alignSelf: "flex-start",
+                marginTop: "2px",
+                background: "none",
+                border: "1px solid var(--cream-line)",
+                borderRadius: "var(--radius-md)",
+                padding: "6px 12px",
+                fontFamily: "var(--font-body)",
+                fontWeight: 600,
+                fontSize: "10.5px",
+                color: "var(--teal-base)",
+                cursor: runningWalletId !== null ? "default" : "pointer",
+                opacity: runningWalletId !== null && runningWalletId !== item.wallet_id ? 0.5 : 1,
+              }}
+            >
+              {runningWalletId === item.wallet_id ? t("admin.sweeps.running") : t("admin.sweeps.sweepOneButton")}
+            </button>
           </div>
         ))
       )}
+
+      {oneError && <ErrorText message={oneError} />}
     </div>
   );
 }

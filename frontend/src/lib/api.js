@@ -580,6 +580,18 @@ export function runSweepNow(adminToken) {
   });
 }
 
+// Single-deposit counterpart to runSweepNow above — queues just one
+// wallet's sweep rather than every pending one. See routers/admin.py's
+// run_sweep_one for why this exists (each sweep now costs real money via
+// GetBlock Energy rental, so paying to consolidate everything just to move
+// one urgent deposit shouldn't be the only option).
+export function runSweepOne(adminToken, walletId) {
+  return request(`/admin/sweeps/run/${walletId}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+}
+
 export function getSweepHistory(adminToken) {
   return request("/admin/sweeps", {
     headers: { Authorization: `Bearer ${adminToken}` },

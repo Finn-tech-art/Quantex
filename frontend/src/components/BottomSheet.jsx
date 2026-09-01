@@ -20,6 +20,41 @@ import { useEffect, useState } from "react";
 // for a moment before actually unmounting.
 const ANIMATION_MS = 220;
 
+// Module-level (shared across EVERY BottomSheet instance on the page, not
+// per-instance state) reference count for the body-scroll lock below.
+// This exists because more than one sheet can be mounted and animating at
+// the same time — e.g. ProfileDetailsSheet closing itself while opening
+// AvatarPicker in the same tap, both of which briefly stay "mounted"
+// during their own ANIMATION_MS exit/enter transition. A naive "save
+// whatever document.body.style.overflow was when I mounted, restore that
+// exact value when I unmount" (what this used to do, per-instance) breaks
+// under that overlap: the second sheet to mount captures "hidden" (the
+// FIRST sheet's own lock) as its "original" value instead of the page's
+// real original value, and restores scroll to "hidden" — permanently —
+// when it later closes, even though every sheet is gone. Reference
+// counting fixes this the standard way multiple stacked modals share one
+// resource: only the FIRST lock in a stack saves the real original value,
+// and only the LAST unlock (count back to 0) restores it, regardless of
+// which order any sheets in between happened to open/close in.
+let scrollLockCount = 0;
+let savedBodyOverflow = null;
+
+function lockBodyScroll() {
+  if (scrollLockCount === 0) {
+    savedBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  scrollLockCount += 1;
+}
+
+function unlockBodyScroll() {
+  scrollLockCount = Math.max(0, scrollLockCount - 1);
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = savedBodyOverflow;
+    savedBodyOverflow = null;
+  }
+}
+
 export default function BottomSheet({ open, onClose, children }) {
   // Splits "should this be in the DOM at all" (mounted) from "should it be
   // showing its OPEN visual state right now" (entered) so closing can play
@@ -46,16 +81,14 @@ export default function BottomSheet({ open, onClose, children }) {
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Standard modal behavior: while a sheet is open, the page behind it
-  // shouldn't scroll. Restored unconditionally on cleanup rather than
-  // conditionally, so an interrupted open->close->open sequence can never
-  // leave scrolling permanently disabled.
+  // shouldn't scroll. See the module-level lockBodyScroll/unlockBodyScroll
+  // pair's own comment above for why this is reference-counted rather than
+  // each instance saving/restoring the ambient value itself — that naive
+  // version broke as soon as two sheets were ever mounted at once.
   useEffect(() => {
     if (!mounted) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
+    lockBodyScroll();
+    return unlockBodyScroll;
   }, [mounted]);
 
   // Lets Escape close the sheet from the keyboard, same as tapping the

@@ -4,35 +4,30 @@
 // doesn't need its own second copy of this exact logic.
 //
 // Precedence, in order:
-//   1. A real Google profile photo (avatarUrl, only ever set for a
-//      Google-OAuth login — see backend/app/utils/auth.py's
-//      get_current_user) — never overridden automatically, so an existing
-//      Google-linked account's look doesn't change on its own the moment
-//      this feature ships. A user can still explicitly pick one of the
-//      hand-drawn avatars instead via AvatarPicker.jsx, which is a
-//      deliberate override stored in avatarId and always takes priority
-//      the moment it's set... except this component has no way to tell
-//      "never chosen" apart from "chose option 0" (avatar_id's column
-//      default IS 0 — see 018_usernames_and_avatars.sql), so in practice a
-//      Google user who has never opened the picker keeps seeing their
-//      real photo here, and the instant they pick ANY avatar (including
-//      option 0 itself) they'd need that choice tracked separately to
-//      ever see it over their photo. That's out of scope for this pass —
-//      today, a Google-linked account's photo always wins over avatarId
-//      unless avatarUrl is missing/broken. Worth revisiting if that ever
-//      feels wrong in practice.
-//   2. The chosen hand-drawn avatar (avatarId -> AvatarGlyph.jsx).
+//   1. The chosen hand-drawn avatar (avatarId -> AvatarGlyph.jsx). This
+//      ALWAYS wins when present, including a Google-linked account that's
+//      never opened the picker — avatar_id's column default is 0 (see
+//      018_usernames_and_avatars.sql), so every account has a real chosen
+//      avatar from the moment it's created, not just once someone
+//      explicitly picks one. An earlier version of this component let a
+//      real Google photo (avatarUrl) win over this unconditionally, which
+//      meant picking a new avatar via AvatarPicker.jsx never visibly did
+//      anything for a Google-linked account — that's backwards from what
+//      "you can have an avatar from a chosen list" means, so the chosen
+//      avatar is the primary identity now, full stop.
+//   2. A real Google profile photo (avatarUrl) — only ever reachable if
+//      avatarId is somehow absent (shouldn't happen once `user` has
+//      loaded, since that column always has a value, but `user` can be
+//      null/mid-load before then).
 //   3. A plain initial-letter circle — the original fallback this always
-//      had, now only reachable if avatarId itself is somehow absent
-//      (shouldn't happen once loaded, since that column always has a
-//      value, but `user` can be null/mid-load).
+//      had, for when neither of the above is available at all.
 //
 // Same "img with onError fallback" pattern MarketsPage.jsx's CoinLogo uses
-// — a broken/expired Google photo URL degrades to step 2 instead of a
-// broken-image icon. `broken` deliberately isn't reset if avatarUrl
-// changes; a full remount (this component unmounting/remounting, e.g. on
-// logout+login as a different user) is what naturally clears it back to
-// false.
+// for step 2 — a broken/expired Google photo URL degrades to step 3
+// instead of a broken-image icon. `broken` deliberately isn't reset if
+// avatarUrl changes; a full remount (this component unmounting/
+// remounting, e.g. on logout+login as a different user) is what naturally
+// clears it back to false.
 import { useState } from "react";
 import AvatarGlyph from "./AvatarGlyph";
 
@@ -41,6 +36,10 @@ import AvatarGlyph from "./AvatarGlyph";
  */
 export default function Avatar({ avatarUrl, avatarId, initial, size = 56 }) {
   const [broken, setBroken] = useState(false);
+
+  if (avatarId != null) {
+    return <AvatarGlyph avatarId={avatarId} size={size} />;
+  }
 
   if (avatarUrl && !broken) {
     return (
@@ -53,10 +52,6 @@ export default function Avatar({ avatarUrl, avatarId, initial, size = 56 }) {
         style={{ borderRadius: "var(--radius-full)", flexShrink: 0, objectFit: "cover" }}
       />
     );
-  }
-
-  if (avatarId != null) {
-    return <AvatarGlyph avatarId={avatarId} size={size} />;
   }
 
   return (

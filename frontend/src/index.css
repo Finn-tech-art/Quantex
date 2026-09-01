@@ -25,6 +25,25 @@
   --warning-text: #8A6A2C;
   --pending-dot: #C9A15B;
 
+  /* Color — Avatar backgrounds. A small, purely decorative palette for
+     AvatarGlyph.jsx's chosen-avatar circles — deliberately separate from
+     the semantic tokens above (--gain/--loss/--pending-dot etc.), since
+     those are meaningful (a red avatar circle would visually suggest
+     "loss" or "danger" right next to actual loss-colored figures
+     elsewhere on screen). These six are cycled across AVATAR_OPTIONS —
+     add a 7th here and reference it there if the avatar list ever grows
+     enough to want more color variety. Every avatar glyph itself is drawn
+     in --on-accent (the same fixed light color already used for content
+     sitting on any dark accent surface — see that token's own note below)
+     since all six of these are mid-to-dark, so a single fixed glyph color
+     stays legible against any of them without per-avatar tuning. */
+  --avatar-1: #C9705C;
+  --avatar-2: #C99A3E;
+  --avatar-3: #5F8F6E;
+  --avatar-4: #4C7FA6;
+  --avatar-5: #8A6BA8;
+  --avatar-6: #3E8E86;
+
   /* --on-accent is DELIBERATELY never redefined below — it's the fixed
      light warm-white color for text/icons that sit on top of an
      intentionally-dark accent surface (a teal-deep hero card, a

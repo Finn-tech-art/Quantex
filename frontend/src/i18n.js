@@ -440,7 +440,6 @@ const resources = {
         menu: 'Menu',
       },
       home: {
-        greeting: 'Hi, {{name}}',
         hero: {
           label: 'TOTAL BALANCE',
           // {{range}} is filled in with whichever RangeTabs pill is

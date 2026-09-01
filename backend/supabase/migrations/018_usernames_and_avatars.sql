@@ -1,0 +1,44 @@
+-- ============================================================================
+-- Usernames and chosen avatars
+-- ============================================================================
+-- Two independent additions to `users`, both purely presentational — neither
+-- column is ever read by any pricing/trading/ledger logic, only by whatever
+-- renders a user's identity on screen.
+--
+-- username: an auto-generated, human-readable handle (e.g. "north_star",
+-- not "user_1123141") — see auth_service._generate_username() for how it's
+-- built (an adjective + a noun from two small word lists, following the
+-- exact same "secrets.choice + retry-on-unique-collision" pattern this file
+-- already uses for referral_code, just with different alphabets). Nullable
+-- here for the same reason first_name/last_name/country are nullable in
+-- 013_users_signup_fields.sql: every account that already exists before
+-- this migration runs has no value yet. Unlike those name fields though,
+-- username has no missing-is-fine steady state — it's meant to always be
+-- shown, so ensure_user_profile() lazily backfills a null username the next
+-- time that account is seen (that function already runs on every
+-- authenticated request via get_current_user, so this self-heals every
+-- pre-existing row without a separate backfill script). Not user-editable —
+-- there's no PUT endpoint for it, unlike avatar_id below — keeping this
+-- system-assigned avoids needing profanity/uniqueness-collision UI for a
+-- freely-typed handle.
+--
+-- avatar_id: which hand-drawn avatar (frontend/src/components/AvatarGlyph.jsx's
+-- AVATAR_OPTIONS array) a user has picked, via PUT /auth/avatar. Deliberately
+-- a bare smallint rather than a lookup-table foreign key — unlike every other
+-- categorical column in this schema (kyc_statuses, ledger_entry_types, etc.),
+-- the backend never branches on WHICH avatar a user has; it only stores and
+-- echoes back an index the frontend defines and interprets entirely on its
+-- own. A lookup table would add a join and an app-restart-to-sync-labels step
+-- for a value this app's own Python and SQL never once inspect. The valid
+-- range (0..11 today) is enforced in Python (auth_service.MAX_AVATAR_ID),
+-- mirroring AVATAR_OPTIONS.length, the same "kept in sync by hand across
+-- frontend and backend" convention TradePage.jsx's own PAIRS list already
+-- documents for itself — not a CHECK constraint here, so raising the option
+-- count never needs a migration, only updating that one Python constant.
+-- Defaults to 0 (the first avatar) so every new row already has a valid,
+-- displayable value with no backfill ever needed for this column.
+-- ============================================================================
+
+alter table users
+  add column username  text unique,
+  add column avatar_id smallint not null default 0 check (avatar_id >= 0);

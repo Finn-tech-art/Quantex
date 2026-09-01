@@ -58,9 +58,16 @@ from app.services.supabase_client import get_supabase
 # withdrawal_service.py builds its own ASSET_NETWORKS from, duplicated here
 # rather than imported to avoid a circular import (withdrawal_service.py
 # already imports THIS module, for the unpaid-fees withdrawal gate). Both
-# are built from the same NETWORK_CONFIG source, so they can never disagree.
+# are built from the same NETWORK_CONFIG source and the same _ACTIVE_NETWORKS
+# filter, so they can never disagree — keep this filter identical to
+# withdrawal_service.py's if it ever changes (currently TRC-20 only for the
+# mainnet launch, see migration 019_disable_evm_networks.sql).
+_ACTIVE_NETWORKS = {"TRC20"}
+
 _ASSET_NETWORKS: dict[str, list[str]] = {}
 for _network_code, _cfg in NETWORK_CONFIG.items():
+    if _network_code not in _ACTIVE_NETWORKS:
+        continue
     _ASSET_NETWORKS.setdefault(_cfg["asset_code"], []).append(_network_code)
 
 # A qualifying transfer must be at least the fee's exact amount (never

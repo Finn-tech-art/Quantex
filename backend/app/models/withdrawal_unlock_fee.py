@@ -32,8 +32,9 @@ class UnpaidFeesResponse(BaseModel):
 
 class PayUnlockFeeRequest(BaseModel):
     # Which network to pay on — must be one of the networks that carry the
-    # fee type's asset (same ASSET_NETWORKS mapping withdrawal_service.py
-    # already uses, e.g. USDC -> BASE or POLYGON).
+    # fee type's asset (same _ASSET_NETWORKS mapping withdrawal_unlock_fee_
+    # service.py builds, e.g. USDT -> TRC20; narrowed to TRC-20 only for the
+    # mainnet launch, see migration 019_disable_evm_networks.sql).
     network: str
 
 

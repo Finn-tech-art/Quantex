@@ -10,7 +10,15 @@ from app.workers.live_deposit_watch import watch_pending_deposit
 
 router = APIRouter(prefix="/deposits", tags=["deposits"])
 
-_SUPPORTED_NETWORKS = {"TRC20", "BASE", "POLYGON"}
+# Narrowed to TRC-20 only for the mainnet launch (migration
+# 019_disable_evm_networks.sql flips the same switch in the DB, via
+# networks.is_active). BASE and POLYGON are fully built and working — see
+# custody_service.py's EVM sweep section — just not wired up with real
+# mainnet credentials yet (no Alchemy mainnet app, no funded relayer
+# wallet). Restore "BASE"/"POLYGON" here (and in wallet.py's identical set,
+# and DepositPage.jsx's NETWORKS array) once those exist — nothing else
+# needs to change.
+_SUPPORTED_NETWORKS = {"TRC20"}
 
 
 @router.post("/expect", response_model=ExpectDepositResponse)

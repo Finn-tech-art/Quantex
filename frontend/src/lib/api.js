@@ -81,6 +81,17 @@ export function setCountry(accessToken, country) {
   });
 }
 
+// Backs AvatarPicker.jsx — avatarId is an index into AvatarGlyph.jsx's
+// AVATAR_OPTIONS array (see that file's own comment for the full
+// frontend/backend sync contract this relies on).
+export function setAvatar(accessToken, avatarId) {
+  return request("/auth/avatar", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ avatar_id: avatarId }),
+  });
+}
+
 export function sendVerifyEmailOtp(accessToken) {
   return request("/auth/verify-email/send", {
     method: "POST",

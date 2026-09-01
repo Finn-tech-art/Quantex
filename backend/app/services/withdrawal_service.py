@@ -157,8 +157,20 @@ def _entry_type_id(code: str) -> int:
 # ever grows a second asset on one network (e.g. USDT on Polygon, mentioned
 # as a possibility in the architecture doc), this dict picks that up
 # automatically — nothing here needs to change by hand.
+#
+# _ACTIVE_NETWORKS below is the withdrawal-side mirror of deposits.py's and
+# wallet.py's _SUPPORTED_NETWORKS = {"TRC20"} (see migration
+# 019_disable_evm_networks.sql) — Base/Polygon are deliberately disabled for
+# the mainnet launch. Without this filter, ASSET_NETWORKS would still offer
+# USDC over a network nobody can ever deposit into anymore. Restore
+# "BASE"/"POLYGON" here (alongside the other two files and
+# WithdrawPage.jsx's ASSET_NETWORKS) once they're reactivated.
+_ACTIVE_NETWORKS = {"TRC20"}
+
 ASSET_NETWORKS: dict[str, list[str]] = {}
 for _network_code, _cfg in NETWORK_CONFIG.items():
+    if _network_code not in _ACTIVE_NETWORKS:
+        continue
     ASSET_NETWORKS.setdefault(_cfg["asset_code"], []).append(_network_code)
 
 

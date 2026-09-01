@@ -37,14 +37,19 @@ import {
 
 // Which network(s) each asset can be withdrawn over — kept in sync BY HAND
 // with withdrawal_service.ASSET_NETWORKS on the backend (itself derived
-// from network_assets.NETWORK_CONFIG: TRC20->USDT, BASE->USDC,
-// POLYGON->USDC). If the backend ever adds a new asset/network pairing,
-// mirror it here too or this screen simply won't offer the new network as
-// an option — the backend's own validation is what actually enforces this,
-// this is only what gets shown as a choice.
+// from network_assets.NETWORK_CONFIG, filtered to _ACTIVE_NETWORKS).
+// Narrowed to TRC-20 only for the mainnet launch — Base/Polygon (USDC) are
+// disabled on the deposit side too (see migration
+// 019_disable_evm_networks.sql and DepositPage.jsx's NETWORKS array), so
+// there's no active network left to withdraw USDC over right now. Restore
+// `USDC: ["BASE", "POLYGON"]` here (alongside the other files noted in
+// that migration's comment) once they're reactivated. If the backend ever
+// adds a new asset/network pairing, mirror it here too or this screen
+// simply won't offer the new network as an option — the backend's own
+// validation is what actually enforces this, this is only what gets shown
+// as a choice.
 const ASSET_NETWORKS = {
   USDT: ["TRC20"],
-  USDC: ["BASE", "POLYGON"],
 };
 
 // Mirrors withdrawal_service.py's MIN_WITHDRAWAL_AMOUNT /

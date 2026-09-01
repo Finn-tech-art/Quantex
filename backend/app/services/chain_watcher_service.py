@@ -251,12 +251,49 @@ def check_single_address(user_id: str, network_code: str) -> list[dict]:
     return _scan_evm(network_code, {address.lower(): user_id})
 
 
+_active_network_codes_cache: set[str] | None = None
+
+
+def _active_network_codes() -> set[str]:
+    """Which network codes currently have networks.is_active = true, read
+    once per process and cached (same process-lifetime pattern as _lookup()
+    above — a plain dict/set rather than lru_cache, cheap to reason about).
+
+    Used only by sweep_all_networks() below, to skip a disabled network
+    entirely rather than letting it call out to a blank or unconfigured
+    RPC endpoint every sweep tick. Right now this means Base and Polygon are
+    skipped — see migration 019_disable_evm_networks.sql, which flips
+    is_active to false for both as part of narrowing the mainnet launch to
+    TRC-20 only (ALCHEMY_BASE_RPC_URL / ALCHEMY_POLYGON_RPC_URL are left
+    blank in production while they're disabled, so calling _scan_evm for
+    them would just throw on every single tick — this avoids that noise
+    rather than relying on sweep_all_networks's own try/except to swallow
+    it silently).
+
+    To bring a network back once it's actually ready (e.g. Base once an
+    Alchemy mainnet app and a funded EVM relayer wallet exist): flip its row
+    back to is_active = true in the `networks` table, then restart this
+    worker process so the cache below re-reads it — it deliberately doesn't
+    re-query on every call, matching every other cache in this module.
+    """
+    global _active_network_codes_cache
+    if _active_network_codes_cache is None:
+        rows = get_supabase().table("networks").select("code").eq("is_active", True).execute().data
+        _active_network_codes_cache = {row["code"] for row in rows}
+    return _active_network_codes_cache
+
+
 def sweep_all_networks() -> None:
+    active_codes = _active_network_codes()
     for network_code, sweep_fn in (
         ("TRC20", sweep_tron),
         ("BASE", lambda: sweep_evm("BASE")),
         ("POLYGON", lambda: sweep_evm("POLYGON")),
     ):
+        if network_code not in active_codes:
+            # Disabled network (e.g. Base/Polygon pre-mainnet-EVM-cutover) —
+            # nothing to scan, and no RPC call worth making.
+            continue
         try:
             sweep_fn()
         except Exception:

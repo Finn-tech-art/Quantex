@@ -48,6 +48,16 @@ class SetCountryRequest(BaseModel):
     country: str
 
 
+class SetAvatarRequest(BaseModel):
+    # An index into frontend/src/components/AvatarGlyph.jsx's AVATAR_OPTIONS
+    # array — see auth_service.MAX_AVATAR_ID's own comment for the full
+    # reasoning on why this is a bare int kept in sync by hand rather than a
+    # lookup-table foreign key. Range-validated in auth_service.set_avatar,
+    # not here, since the valid range is a Python constant, not a fixed
+    # schema fact this model could express with e.g. conint(le=...).
+    avatar_id: int
+
+
 class UserProfile(BaseModel):
     id: str
     email: str
@@ -62,6 +72,17 @@ class UserProfile(BaseModel):
     # show — the frontend falls back to a plain initial-letter circle
     # whenever this is None (see MenuPage.jsx).
     avatar_url: str | None = None
+    # Auto-assigned at profile creation (or lazily backfilled onto an
+    # existing row — see auth_service.ensure_user_profile) — a human-
+    # readable handle like "north_star" instead of a raw user id. Optional
+    # only because the lazy-backfill window means a request could
+    # theoretically observe it as None for one request before the backfill
+    # write lands; in steady state every account has one.
+    username: str | None = None
+    # Which entry in AvatarGlyph.jsx's AVATAR_OPTIONS this user has chosen —
+    # see SetAvatarRequest's own comment. Always a valid value (the column
+    # defaults to 0), never None.
+    avatar_id: int = 0
     # All three Optional/None-default here (unlike SignupRequest's required
     # versions above) because an existing row from before this migration, or
     # a Google-OAuth account that never went through the signup form, can

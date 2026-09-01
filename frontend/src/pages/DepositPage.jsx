@@ -9,7 +9,14 @@ import NetworkGlyph from "../components/NetworkGlyph";
 import SelectField from "../components/SelectField";
 import { expectDeposit, getBalances, getDepositAddress, WS_BASE } from "../lib/api";
 
-const NETWORKS = ["TRC20", "BASE", "POLYGON"];
+// Narrowed to TRC-20 only for the mainnet launch — Base and Polygon are
+// fully built on the backend (see custody_service.py) but not wired up with
+// real mainnet credentials yet. Restore "BASE"/"POLYGON" here once they are
+// (and revert the matching _SUPPORTED_NETWORKS sets in the backend's
+// deposits.py and wallet.py routers, and the networks.is_active flip in
+// migration 019_disable_evm_networks.sql) — the dropdown below will pick
+// the extra option(s) up automatically since it just maps over this array.
+const NETWORKS = ["TRC20"];
 
 export default function DepositPage() {
   const { t } = useTranslation();

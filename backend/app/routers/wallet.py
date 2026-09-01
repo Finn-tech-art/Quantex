@@ -11,7 +11,13 @@ from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
-_SUPPORTED_NETWORKS = {"TRC20", "BASE", "POLYGON"}
+# Narrowed to TRC-20 only for the mainnet launch — see the identical comment
+# on deposits.py's _SUPPORTED_NETWORKS for why (and how to reverse it). This
+# is what stops a user from ever being handed a Base/Polygon deposit
+# address right now: without it, a real deposit to one of those addresses
+# would just sit uncredited, since chain_watcher_service isn't scanning
+# those networks while they're disabled.
+_SUPPORTED_NETWORKS = {"TRC20"}
 
 # Matches portfolio_history_service._RANGE_TO_TIMEDELTA's keys plus "all" --
 # kept as an explicit set here (rather than importing that private dict)

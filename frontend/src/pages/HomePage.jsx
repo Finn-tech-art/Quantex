@@ -29,11 +29,13 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
+import Avatar from "../components/Avatar";
 import CoinLogo from "../components/CoinLogo";
 import CurrencyPicker from "../components/CurrencyPicker";
 import DeltaChip from "../components/DeltaChip";
 import Icon from "../components/Icon";
 import NotificationBell from "../components/NotificationBell";
+import ProfileDetailsSheet from "../components/ProfileDetailsSheet";
 import VerifyEmailPrompt from "../components/VerifyEmailPrompt";
 import useAssetPrices from "../hooks/useAssetPrices";
 import useCountUp from "../hooks/useCountUp";
@@ -43,7 +45,11 @@ import { getBalances, getMarkets, getPortfolioHistory, listBots } from "../lib/a
 
 export default function HomePage() {
   const { t } = useTranslation();
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, refreshUser } = useAuth();
+  // Drives ProfileDetailsSheet — opened by tapping the avatar in TopRow
+  // (see that component below), which replaced the old "Hi, {name}" text
+  // greeting entirely.
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
 
   // Raw balances (asset + quantity, e.g. { asset: "BTC", amount: "0.002" })
   // rather than a pre-summed dollar figure — see lib/currency.js's module
@@ -121,15 +127,19 @@ export default function HomePage() {
   const displayValue = convertUsdTo(totalUsd, currency, prices);
 
   const activeBots = (bots || []).filter((b) => b.status === "ACTIVE");
-  // First name only, derived from the email's local part — there's no
-  // separate "display name" field anywhere in the schema (see UserProfile
-  // in models/auth.py), so this is the closest thing to a name available.
-  const firstName = (user.email || "").split("@")[0];
 
   return (
     <div style={{ paddingTop: "var(--space-11)", paddingBottom: "var(--space-16)" }}>
       <div style={{ maxWidth: 384, margin: "0 auto", padding: "0 20px", display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
-        <TopRow greeting={t("home.greeting", { name: firstName })} />
+        <TopRow user={user} onAvatarClick={() => setProfileSheetOpen(true)} />
+
+        <ProfileDetailsSheet
+          open={profileSheetOpen}
+          onClose={() => setProfileSheetOpen(false)}
+          user={user}
+          accessToken={accessToken}
+          refreshUser={refreshUser}
+        />
 
         {!user.email_verified && <VerifyEmailPrompt />}
 
@@ -161,14 +171,25 @@ export default function HomePage() {
   );
 }
 
-function TopRow({ greeting }) {
+// Used to show a plain "Hi, {name}" text greeting derived from the email's
+// local part — replaced with the user's own avatar, tapping which opens
+// ProfileDetailsSheet (username/name/email at a glance, plus a way into
+// AvatarPicker) instead of just sitting there as inert text.
+function TopRow({ user, onAvatarClick }) {
+  const initial = (user.email || "?").charAt(0).toUpperCase();
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-      <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "18px", color: "var(--ink-base)" }}>{greeting}</span>
-      {/* Used to be a plain decorative div with a bell glyph and nothing
-          else — NotificationBell.jsx owns the icon, the unread badge, and
-          the dropdown itself now; see that file's module comment for the
-          full design. */}
+      <button
+        type="button"
+        onClick={onAvatarClick}
+        aria-label="View profile"
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex" }}
+      >
+        <Avatar avatarUrl={user.avatar_url} avatarId={user.avatar_id} initial={initial} size={38} />
+      </button>
+      {/* NotificationBell.jsx owns the icon, the unread badge, and the
+          dropdown itself — see that file's module comment for the full
+          design. */}
       <NotificationBell />
     </div>
   );

@@ -4,6 +4,7 @@ from gotrue.errors import AuthError
 from app.models.auth import (
     LoginRequest,
     RefreshRequest,
+    SetAvatarRequest,
     SetCountryRequest,
     SignupRequest,
     TokenResponse,
@@ -65,6 +66,8 @@ def me(user: dict = Depends(get_current_user)):
         email_verified=user["email_verified"],
         created_at=user["created_at"],
         avatar_url=user.get("avatar_url"),
+        username=user.get("username"),
+        avatar_id=user.get("avatar_id", 0),
         first_name=user.get("first_name"),
         last_name=user.get("last_name"),
         country=user.get("country"),
@@ -88,9 +91,38 @@ def set_country(body: SetCountryRequest, user: dict = Depends(get_current_user))
         email_verified=user["email_verified"],
         created_at=user["created_at"],
         avatar_url=user.get("avatar_url"),
+        username=user.get("username"),
+        avatar_id=user.get("avatar_id", 0),
         first_name=user.get("first_name"),
         last_name=user.get("last_name"),
         country=body.country,
+        daily_session_limit=user.get("daily_session_limit", 3),
+    )
+
+
+@router.put("/avatar", response_model=UserProfile)
+def set_avatar(body: SetAvatarRequest, user: dict = Depends(get_current_user)):
+    # Backs AvatarPicker.jsx (HomePage/MenuPage) — same "rebuild UserProfile
+    # from the already-fetched `user` dict, swapping in just the field that
+    # changed" shape as set_country above, rather than a second round-trip
+    # to re-read the row.
+    try:
+        auth_service.set_avatar(user["id"], body.avatar_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return UserProfile(
+        id=user["id"],
+        email=user["email"],
+        referral_code=user["referral_code"],
+        kyc_status=auth_service.kyc_status_code(user["kyc_status_id"]),
+        email_verified=user["email_verified"],
+        created_at=user["created_at"],
+        avatar_url=user.get("avatar_url"),
+        username=user.get("username"),
+        avatar_id=body.avatar_id,
+        first_name=user.get("first_name"),
+        last_name=user.get("last_name"),
+        country=user.get("country"),
         daily_session_limit=user.get("daily_session_limit", 3),
     )
 

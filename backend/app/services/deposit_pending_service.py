@@ -1,6 +1,11 @@
 import json
 
-PENDING_TTL_SECONDS = 10 * 60
+# Must stay >= live_deposit_watch.MAX_ATTEMPTS * POLL_INTERVAL_SECONDS (20
+# minutes) — this is the actual ceiling on how long the live watch can run,
+# since is_pending_sync() below returns False the instant this key expires,
+# which stops the watch task from rescheduling itself regardless of how many
+# attempts it has left.
+PENDING_TTL_SECONDS = 20 * 60
 
 
 def _pending_key(user_id: str, network_code: str) -> str:

@@ -1,0 +1,33 @@
+# Railway deployment config for the Celery BEAT service.
+#
+# Same repo, same `backend` root directory as the web service (railway.toml)
+# and the worker service (railway.worker.toml) — only the start command
+# differs. When creating THIS service in Railway's dashboard: set its "Root
+# Directory" to `backend`, then under Settings -> Config-as-code, set the
+# "Config File Path" to `backend/railway.beat.toml`.
+#
+# This process is what actually FIRES the periodic tasks defined in
+# celery_app.py's beat_schedule on their schedule (e.g. the twice-daily
+# deposit sweep backstop, run_deposit_sweep, at 00:00/12:00 UTC) — it
+# doesn't execute them itself, it just enqueues them for the worker service
+# to pick up. Without this service running, nothing on a schedule ever
+# happens automatically: deposits would only ever get credited via the live
+# 10-minute watch (while a user has the Deposit page open) or a manually
+# triggered sweep, never the unconditional backstop.
+#
+# CRITICAL: run exactly ONE instance of this service, never more. Beat's own
+# job is deciding "is it time to enqueue this task yet" — two beat instances
+# both making that same decision independently means every scheduled task
+# fires twice as often as intended. record_ledger_entry()'s own tx_hash
+# dedup would still prevent an actual double-credit for deposits
+# specifically, but there's no reason to rely on that safety net when
+# avoiding the duplication in the first place costs nothing (just: don't
+# set replicas > 1 on this one service, unlike the worker service which is
+# fine to scale). Same environment-variable requirement as the worker
+# service — see railway.worker.toml's comment.
+
+[deploy]
+startCommand = "celery -A app.workers.celery_app beat --loglevel=info"
+
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

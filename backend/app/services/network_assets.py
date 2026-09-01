@@ -21,9 +21,22 @@
 NETWORK_CONFIG = {
     "TRC20": {
         "asset_code": "USDT",
-        "contract_address": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",  # Nile testnet, verified on-chain
+        # Real Tron mainnet USDT (Tether USD) contract — swapped in from the
+        # Nile testnet placeholder during the mainnet cutover. Verified live
+        # against TronGrid mainnet itself (not just typed from memory, given
+        # a wrong address here means deposits silently never get detected):
+        # querying this address's own token_info back from TronGrid returns
+        # symbol="USDT", name="Tether USD", decimals=6, matching below.
+        "contract_address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
         "decimals": 6,
-        "min_confirmations": 19,
+        # No min_confirmations key here (unlike BASE/POLYGON below) — Tron
+        # deposit scanning (chain_watcher_service._scan_tron) now asks
+        # TronGrid for only_confirmed=true transfers directly instead of
+        # re-deriving finality from a block-count difference itself, so
+        # there's nothing left in this codebase that reads a TRC20
+        # confirmation depth. Keep it that way rather than adding an unused
+        # key back — if that scanning approach ever changes, re-add this
+        # alongside whatever needs it.
     },
     "BASE": {
         "asset_code": "USDC",

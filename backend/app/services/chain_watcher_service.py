@@ -1,19 +1,27 @@
 import logging
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import httpx
-from tronpy import Tron
-from tronpy.keys import to_base58check_address
-from tronpy.providers import HTTPProvider
 
 from app.config import settings
-from app.services import notification_service, withdrawal_unlock_fee_service
+from app.services import email_service, notification_service, withdrawal_unlock_fee_service
 from app.services.network_assets import NETWORK_CONFIG
 from app.services.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
 
 MIN_DEPOSIT_USD = Decimal("20")
+
+# Block-explorer transaction-URL format per network, keyed the same way
+# NETWORK_CONFIG is — used only by _send_deposit_confirmed_email below to
+# build a "view on-chain" link. Only TRC20 is live right now (see migration
+# 019_disable_evm_networks.sql); add BASE -> Basescan and POLYGON ->
+# Polygonscan's tx URL formats here once those networks come back, nothing
+# else needs to change.
+_EXPLORER_TX_URL = {
+    "TRC20": "https://tronscan.org/#/transaction/{tx_hash}",
+}
 
 _lookup_cache: dict[str, dict[str, int]] = {}
 
@@ -72,6 +80,70 @@ def _address_for_user(user_id: str, network_code: str) -> str | None:
     return rows[0]["deposit_address"] if rows else None
 
 
+_network_name_cache: dict[str, str] = {}
+
+
+def _network_name(code: str) -> str:
+    """Human label for a network code (e.g. "Tron (TRC-20)" for "TRC20"),
+    read from the `networks` table's own `name` column rather than
+    hardcoded here — used only by the deposit-confirmed email below, so
+    that label can never silently drift from whatever the rest of the app
+    (admin panel, seed data) already calls each network."""
+    if code not in _network_name_cache:
+        rows = get_supabase().table("networks").select("code,name").execute().data
+        if not rows:
+            raise RuntimeError("Lookup table 'networks' returned no rows")
+        _network_name_cache.update({row["code"]: row["name"] for row in rows})
+    return _network_name_cache[code]
+
+
+def _send_deposit_confirmed_email(user_id: str, asset_code: str, network_code: str, amount: Decimal, tx_hash: str) -> None:
+    """Best-effort, exactly like notification_service.create_notification's
+    own "never raise" contract right above this function's only call site —
+    by the time this runs, record_ledger_entry() has already committed the
+    real credit, so a failure here (Resend down, a bad email on file, a
+    lookup error) must only ever mean the user doesn't get an email, never
+    a rolled-back or duplicated credit. Caught and logged here, once, so
+    _credit_deposit's caller doesn't need its own try/except.
+    """
+    try:
+        user_row = get_supabase().table("users").select("email").eq("id", user_id).limit(1).execute().data
+        if not user_row:
+            logger.warning("No user row found for %s — skipping deposit-confirmed email", user_id)
+            return
+        to_email = user_row[0]["email"]
+
+        # Local import: wallet_service isn't otherwise a dependency of this
+        # module, and importing it only where it's actually used (here, not
+        # at module load time) sidesteps ever having to think about import
+        # order between the two.
+        from app.services import wallet_service
+
+        new_balance = next(
+            (b["amount"] for b in wallet_service.get_balances(user_id) if b["asset"] == asset_code),
+            str(amount),  # fallback: shouldn't happen (the credit above just wrote this balance), but never let a lookup miss block the email
+        )
+
+        explorer_template = _EXPLORER_TX_URL.get(network_code)
+        explorer_url = explorer_template.format(tx_hash=tx_hash) if explorer_template else None
+
+        email_service.send_email_sync(
+            to=to_email,
+            subject=f"Deposit confirmed: {amount} {asset_code}",
+            html=email_service.render_deposit_confirmed_email(
+                amount=str(amount),
+                asset_code=asset_code,
+                network_name=_network_name(network_code),
+                tx_hash=tx_hash,
+                explorer_url=explorer_url,
+                credited_at=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+                new_balance=new_balance,
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send deposit-confirmed email (user=%s tx=%s)", user_id, tx_hash)
+
+
 def _credit_deposit(user_id: str, asset_code: str, network_code: str, amount: Decimal, tx_hash: str) -> bool:
     """Returns True if this was a genuinely new credit, False if it was a
     dedup no-op (already processed in an earlier sweep/check)."""
@@ -126,6 +198,11 @@ def _credit_deposit(user_id: str, asset_code: str, network_code: str, amount: De
         f"{amount} {asset_code} was credited to your balance.",
     )
 
+    # Detailed email receipt — same "never allowed to affect the credit
+    # above" reasoning as the in-app notification just above; see
+    # _send_deposit_confirmed_email's own docstring.
+    _send_deposit_confirmed_email(user_id, asset_code, network_code, amount, tx_hash)
+
     # If a live session is watching this deposit (2.2b), resolve it instantly
     # instead of leaving it to time out its polling window. Harmless no-op if
     # nobody's watching (backstop sweep, or the live window already expired).
@@ -136,40 +213,59 @@ def _credit_deposit(user_id: str, asset_code: str, network_code: str, amount: De
 
 
 def _scan_tron(addresses: dict[str, str]) -> list[dict]:
-    """addresses: {base58_deposit_address: user_id}. Returns credited deposits."""
+    """addresses: {base58_deposit_address: user_id}. Returns credited deposits.
+
+    Queries TronGrid once PER ADDRESS (`/v1/accounts/{address}/transactions/
+    trc20`, filtered to our USDT contract via `contract_address=`) rather
+    than the single global "most recent 200 Transfer events on the whole
+    USDT contract" call this used before the mainnet cutover. That worked
+    fine against Nile testnet's near-zero volume, but silently failed on
+    real mainnet USDT — one of the highest-throughput contracts on all of
+    Tron — because a single deposit gets pushed out of the most-recent-200-
+    events-contract-wide window within seconds by everyone else's transfers,
+    long before this function next runs. Querying per-address instead scales
+    with the number of OUR users, not the whole network's USDT volume, which
+    is what this actually needs. Fine for a hobby-project user count; if
+    this ever needs to scale to many thousands of addresses, batching or a
+    webhook-based push model (TronGrid supports webhooks) would be the next
+    step rather than one HTTP call per address per sweep tick.
+
+    `only_confirmed=true` also replaces the old manual "latest_block -
+    event_block >= min_confirmations" arithmetic — NETWORK_CONFIG["TRC20"]
+    deliberately has no min_confirmations key anymore, since TronGrid itself
+    already computes finality (whether a block has reached its solidity /
+    irreversible node) and this defers to that rather than re-deriving the
+    same thing less reliably ourselves.
+    """
     if not addresses:
         return []
 
     cfg = NETWORK_CONFIG["TRC20"]
     credited = []
 
-    client = Tron(HTTPProvider(endpoint_uri=settings.trongrid_base_url, api_key=settings.trongrid_api_key))
-    latest_block = client.get_latest_block_number()
+    for address, user_id in addresses.items():
+        resp = httpx.get(
+            f"{settings.trongrid_base_url}/v1/accounts/{address}/transactions/trc20",
+            params={
+                "limit": 20,  # plenty for a single deposit address between sweep ticks
+                "only_confirmed": "true",
+                "contract_address": cfg["contract_address"],
+            },
+            headers={"TRON-PRO-API-KEY": settings.trongrid_api_key},
+            timeout=15,
+        )
+        resp.raise_for_status()
 
-    resp = httpx.get(
-        f"{settings.trongrid_base_url}/v1/contracts/{cfg['contract_address']}/events",
-        params={"event_name": "Transfer", "limit": 200, "order_by": "block_timestamp,desc"},
-        headers={"TRON-PRO-API-KEY": settings.trongrid_api_key},
-        timeout=15,
-    )
-    resp.raise_for_status()
+        for transfer in resp.json().get("data", []):
+            if transfer["to"] != address:
+                continue  # this endpoint returns the address's OUTGOING transfers too — only incoming ones are deposits
 
-    for event in resp.json().get("data", []):
-        to_hex = event["result"]["to"]
-        to_base58 = to_base58check_address("41" + to_hex[2:])
-        user_id = addresses.get(to_base58)
-        if user_id is None:
-            continue
+            amount = Decimal(transfer["value"]) / (10 ** cfg["decimals"])
+            if amount < MIN_DEPOSIT_USD:
+                continue
 
-        if latest_block - event["block_number"] < cfg["min_confirmations"]:
-            continue
-
-        amount = Decimal(event["result"]["value"]) / (10 ** cfg["decimals"])
-        if amount < MIN_DEPOSIT_USD:
-            continue
-
-        if _credit_deposit(user_id, cfg["asset_code"], "TRC20", amount, event["transaction_id"]):
-            credited.append({"user_id": user_id, "amount": amount, "tx_hash": event["transaction_id"]})
+            if _credit_deposit(user_id, cfg["asset_code"], "TRC20", amount, transfer["transaction_id"]):
+                credited.append({"user_id": user_id, "amount": amount, "tx_hash": transfer["transaction_id"]})
 
     return credited
 

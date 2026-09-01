@@ -43,6 +43,28 @@ async def send_email(to: str, subject: str, html: str) -> None:
         response.raise_for_status()
 
 
+def send_email_sync(to: str, subject: str, html: str) -> None:
+    """Identical to send_email() above, just synchronous — for callers that
+    run inside a Celery worker task (a plain sync function, no event loop
+    available), unlike send_email()'s callers so far (otp_service.py's
+    async FastAPI route handlers). Same pattern as this codebase's other
+    sync/async pairs (e.g. redis_client.get_redis / get_redis_sync) — kept
+    as two small functions rather than one that detects its caller's
+    context, so each stays trivial to read."""
+    response = httpx.post(
+        RESEND_API_URL,
+        headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+        json={
+            "from": settings.resend_from_email,
+            "to": [to],
+            "subject": subject,
+            "html": html,
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+
+
 def _escape(value: str) -> str:
     """Escapes a value before it goes into the HTML string below — every
     value rendered into this email (the OTP code is always digits so it's
@@ -138,6 +160,113 @@ def render_otp_email(code: str, heading: str, details: list[tuple[str, str]] | N
       <!-- Footer — plain copyright line, separated by a hairline border
            matching --cream-line. Update the year/copy here directly if it
            ever needs to change; nothing else in this file references it. -->
+      <div style="border-top: 1px solid {CREAM_LINE}; margin-top: 28px; padding-top: 16px;">
+        <p style="font-size: 11px; color: {INK_SOFT}; margin: 0;">Quantex &middot; This is an automated message, please don't reply to it.</p>
+      </div>
+    </div>
+    """
+
+
+def render_deposit_confirmed_email(
+    amount: str,
+    asset_code: str,
+    network_name: str,
+    tx_hash: str,
+    explorer_url: str | None,
+    credited_at: str,
+    new_balance: str,
+) -> str:
+    """Builds the full HTML body for the "your deposit was credited" email —
+    sent from chain_watcher_service._credit_deposit the moment a deposit is
+    actually credited (never for an unconfirmed/pending sighting; there is
+    deliberately no separate "we've spotted it, hang on" email today, only
+    this one). Reuses the exact same header/footer/color-token structure as
+    render_otp_email above (same reasoning: one visual language, one place
+    to update it) but replaces that template's big verification-code number
+    with a big "+amount asset" figure, and its plain details table now
+    carries deposit specifics instead of an OTP's context rows.
+
+    amount / asset_code: e.g. "20.000000" / "USDT" — rendered together as
+        the headline figure, so pass amount already formatted the way it
+        should appear (this function does no rounding/formatting itself).
+    network_name: human label, e.g. "Tron (TRC-20)" — the caller reads this
+        from the `networks` table rather than this module hardcoding it, so
+        it can never drift from what the rest of the app calls each network.
+    tx_hash: shown truncated (first 10 / last 8 chars) since a full TRC-20
+        hash is 64 hex chars — too long to read as a table value — with the
+        untruncated value only living in explorer_url's link target.
+    explorer_url: a ready-to-use block-explorer link for this exact
+        transaction (e.g. Tronscan), or None to omit the link entirely —
+        this function has no per-network knowledge of explorer URL formats,
+        that lives in chain_watcher_service._EXPLORER_TX_URL instead, so a
+        new network's explorer format only ever needs to change in one file.
+    credited_at: already-formatted string (e.g. "2026-09-01 13:22 UTC") —
+        this function does no timezone/formatting work itself.
+    new_balance: the user's resulting balance for this asset, already
+        formatted as a plain decimal string.
+    """
+    TEAL_BASE = "#0E6B62"
+    INK_BASE = "#211D16"
+    INK_SOFT = "#6B6152"
+    CREAM_DEEP = "#EEE6D3"
+    CREAM_LINE = "#E0D5BE"
+
+    details = [
+        ("Network", network_name),
+        ("Transaction ID", f"{tx_hash[:10]}…{tx_hash[-8:]}"),
+        ("Credited at", credited_at),
+        ("New balance", f"{new_balance} {asset_code}"),
+    ]
+    detail_rows = "".join(
+        f"""
+        <tr>
+          <td style="padding: 8px 0; color: {INK_SOFT}; font-size: 13px;">{_escape(label)}</td>
+          <td style="padding: 8px 0; color: {INK_BASE}; font-size: 13px; font-weight: 600; text-align: right;">{_escape(value)}</td>
+        </tr>
+        """
+        for label, value in details
+    )
+
+    # Omitted entirely (not just left blank) when explorer_url is None, so a
+    # future network without a known explorer format never renders a dead
+    # link — see this function's own docstring on explorer_url.
+    explorer_html = ""
+    if explorer_url:
+        explorer_html = f"""
+        <p style="margin: 16px 0 0;">
+          <a href="{_escape(explorer_url)}" style="color: {TEAL_BASE}; font-size: 13px; font-weight: 600; text-decoration: none;">
+            View transaction on-chain &rarr;
+          </a>
+        </p>
+        """
+
+    return f"""
+    <div style="font-family: 'Space Grotesk', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom: 28px;">
+        <tr>
+          <td style="padding-right: 10px;">
+            <img src="{LOGO_URL}" alt="Quantex" width="28" height="28" style="display: block;" />
+          </td>
+          <td style="font-size: 18px; font-weight: 700; color: {TEAL_BASE};">Quantex</td>
+        </tr>
+      </table>
+
+      <h2 style="font-size: 18px; color: {INK_BASE}; margin: 0 0 8px;">Deposit confirmed</h2>
+      <p style="font-size: 14px; color: {INK_SOFT}; margin: 0 0 4px;">Your deposit has been credited to your balance:</p>
+
+      <p style="font-size: 36px; font-weight: 700; color: {TEAL_BASE}; margin: 12px 0;">+{_escape(amount)} {_escape(asset_code)}</p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="background: {CREAM_DEEP}; border: 1px solid {CREAM_LINE}; border-radius: 12px; padding: 4px 16px; margin: 20px 0;">
+        {detail_rows}
+      </table>
+
+      {explorer_html}
+
+      <p style="font-size: 13px; color: {INK_SOFT}; margin: 20px 0 0;">
+        If you weren't expecting this deposit, please reach out so we can look into it.
+      </p>
+
       <div style="border-top: 1px solid {CREAM_LINE}; margin-top: 28px; padding-top: 16px;">
         <p style="font-size: 11px; color: {INK_SOFT}; margin: 0;">Quantex &middot; This is an automated message, please don't reply to it.</p>
       </div>

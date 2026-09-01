@@ -2,7 +2,18 @@ from app.services.chain_watcher_service import check_single_address
 from app.services.deposit_pending_service import is_pending_sync
 from app.workers.celery_app import celery_app
 
-MAX_ATTEMPTS = 10
+# 20 checks x 60s = 20 minutes of live polling (was 10/10 minutes). Must stay
+# in lockstep with deposit_pending_service.PENDING_TTL_SECONDS below — that
+# Redis key's TTL is what is_pending_sync() checks each attempt, so if this
+# window were ever longer than the TTL, the key would expire mid-watch and
+# silently cut the polling short before MAX_ATTEMPTS is reached. Verified
+# cheap to run at this length: each attempt is one extra TronGrid call (now
+# scoped to a single address, not the whole USDT contract — see
+# chain_watcher_service._scan_tron) and a couple of trivial Redis ops, both
+# negligible even at many times this frequency for a hobby-project user
+# count. Raise MAX_ATTEMPTS (and PENDING_TTL_SECONDS to match) further if an
+# even longer live window is ever wanted.
+MAX_ATTEMPTS = 20
 POLL_INTERVAL_SECONDS = 60
 
 

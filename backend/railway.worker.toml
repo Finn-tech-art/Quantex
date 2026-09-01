@@ -1,0 +1,36 @@
+# Railway deployment config for the Celery WORKER service.
+#
+# Same repo, same `backend` root directory, same requirements.txt as the
+# main FastAPI service (railway.toml) and the beat service
+# (railway.beat.toml) — the only thing that differs between these three
+# Railway services is which process actually gets started. When creating
+# THIS service in Railway's dashboard: set its "Root Directory" to `backend`
+# (same as the web service), then under Settings -> Config-as-code, set the
+# "Config File Path" to `backend/railway.worker.toml` so Railway picks up
+# THIS file instead of the default `railway.toml`.
+#
+# This process is what actually EXECUTES queued tasks — both the periodic
+# ones beat schedules (see celery_app.py's beat_schedule) and one-off ones
+# queued directly from request handlers (e.g. deposits.py's
+# watch_pending_deposit.delay(...) for the live 10-minute deposit watch).
+# Without this service running, tasks just sit in the Redis queue forever —
+# nothing else in this system consumes them.
+#
+# Needs the exact same environment variables as the web service (REDIS_URL
+# especially, but really everything in app/config.py — Celery imports the
+# same Settings object) attached to this service in Railway too; Railway's
+# "Shared Variables" feature is the easiest way to keep them in sync across
+# all of this repo's services rather than copying them into each one by hand.
+
+[deploy]
+# --loglevel=info (not debug) — enough to see task execution and errors
+# without drowning in per-tick noise. Bump to debug only while actively
+# troubleshooting a stuck task.
+startCommand = "celery -A app.workers.celery_app worker --loglevel=info"
+
+# Safe to scale this service to more than one replica later if task volume
+# ever grows enough to need it — unlike beat (railway.beat.toml), running
+# multiple workers concurrently is the normal, supported way to add
+# throughput, not a correctness risk. Not needed at hobby-project volume.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

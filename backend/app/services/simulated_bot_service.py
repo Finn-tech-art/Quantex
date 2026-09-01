@@ -37,6 +37,29 @@ def _usdt_asset_id() -> int:
         _asset_id_cache.update({row["code"]: row["id"] for row in rows})
     return _asset_id_cache["USDT"]
 
+
+def _usdt_balance(user_id: str) -> Decimal:
+    """Same single-asset targeted query trading_service._balance() already
+    uses rather than wallet_service.get_balances() (which returns every
+    asset the user holds, only useful here after filtering down to one) —
+    duplicated rather than imported since each of these services keeps its
+    own small lookups, same reasoning as _usdt_asset_id() above. Returns 0
+    for a user with no balances row at all, same "no row means zero, not an
+    error" convention _usdt_asset_id()'s callers already rely on elsewhere
+    (a brand-new account has genuinely never had a balances row written for
+    it yet)."""
+    rows = (
+        get_supabase()
+        .table("balances")
+        .select("amount")
+        .eq("user_id", user_id)
+        .eq("asset_id", _usdt_asset_id())
+        .limit(1)
+        .execute()
+        .data
+    )
+    return Decimal(str(rows[0]["amount"])) if rows else Decimal("0")
+
 # App-level floor on top of the DB's own allocation_amount >= 50 CHECK — see
 # quantex-schema.sql's comment on bots.allocation_amount for where that
 # number comes from. Kept in sync here only so bot creation can return a
@@ -113,6 +136,23 @@ def create_simulated_bot(
     it up."""
     if allocation_amount < MIN_ALLOCATION_AMOUNT:
         raise ValueError(f"allocation_amount must be >= {MIN_ALLOCATION_AMOUNT}")
+    # A simulated bot's allocation_amount is never actually debited from the
+    # user's real balance at creation time (unlike a withdrawal, there's no
+    # BOT_ALLOCATION ledger entry written anywhere in this codebase yet — it
+    # only ever functions as the notional base the session's scripted
+    # return_pct is multiplied against, see fake_trading_service.
+    # generate_fake_trading_result's target_total_pnl). Without this check a
+    # bot could still be created with an allocation far larger than the user
+    # actually has, which would go on to compute a plausible-looking but
+    # fictitious P&L against money that was never really there — so balance
+    # is still checked, even though it's never moved. Read fresh right here
+    # rather than trusting anything the frontend sent, since balance can
+    # change between page load and submit.
+    current_balance = _usdt_balance(user_id)
+    if allocation_amount > current_balance:
+        raise ValueError(
+            f"allocation_amount ({allocation_amount}) exceeds your available balance ({current_balance} USDT)"
+        )
     if interval_seconds < MIN_INTERVAL_SECONDS:
         raise ValueError(f"interval_seconds must be >= {MIN_INTERVAL_SECONDS}")
     if session_length_minutes < MIN_SESSION_LENGTH_MINUTES:

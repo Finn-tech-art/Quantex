@@ -229,6 +229,8 @@ const resources = {
           gridModeHint: 'Arithmetic spaces grid lines by a fixed price gap; geometric spaces them by a fixed percentage instead.',
           allocationLabel: 'Allocation (USDT)',
           allocationHint: 'Minimum $50.',
+          availableLabel: 'Available: {{balance}} USDT',
+          insufficientBalance: 'That’s more than your available balance ({{balance}} USDT).',
           sessionLengthLabel: 'Session length',
           sessionLengthOption5: '5 min',
           sessionLengthOption10: '10 min (Recommended)',

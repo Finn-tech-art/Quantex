@@ -5,7 +5,7 @@
 // page, which already renders a simulated bot correctly (BotDetailPage.jsx
 // never assumed grid-only fields — see that file for confirmation).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
@@ -15,7 +15,7 @@ import SelectField from "../components/SelectField";
 import ConfirmSheet from "../components/ConfirmSheet";
 import { ErrorText, PrimaryButton } from "../components/FormControls";
 import { useToast } from "../context/ToastContext";
-import { createBot } from "../lib/api";
+import { createBot, getBalances } from "../lib/api";
 
 // The only pairs a scripted bot can actually run on — a bot's pair has to
 // exist in market_data_feed.py's TRACKED_SYMBOLS (mirrored here exactly
@@ -111,8 +111,33 @@ export default function CreateBotPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const toast = useToast();
 
+  // Fetched once on mount, same call TradePage.jsx already makes for its own
+  // "Available: X USDT" line — used below to reject an over-allocation
+  // BEFORE the confirm sheet even opens, rather than only finding out via a
+  // failed createBot() call after the user has already confirmed. This is a
+  // UX nicety only, not the real guard — simulated_bot_service.
+  // create_simulated_bot re-checks the user's balance fresh on the backend
+  // regardless (balance can change between this fetch and submit), so a
+  // stale or unfetched value here can never let an over-allocation through,
+  // only fail to catch it a moment earlier than the backend would anyway.
+  const [usdtBalance, setUsdtBalance] = useState(null); // null = not loaded yet
+
+  useEffect(() => {
+    if (!accessToken) return;
+    getBalances(accessToken).then((res) => {
+      setUsdtBalance(res.balances.find((b) => b.asset === "USDT")?.amount ?? "0");
+    });
+  }, [accessToken]);
+
   function handleSubmit(e) {
     e.preventDefault();
+    // usdtBalance === null (still loading) doesn't block submission — the
+    // backend check is authoritative either way, this is purely an early,
+    // friendlier rejection when the balance IS already known.
+    if (usdtBalance !== null && Number(allocationAmount) > Number(usdtBalance)) {
+      setError(t("bots.create.insufficientBalance", { balance: usdtBalance }));
+      return;
+    }
     setConfirmOpen(true);
   }
 
@@ -206,14 +231,21 @@ export default function CreateBotPage() {
             </span>
           </div>
 
-          <NumberFieldWithHint
-            label={t("bots.create.allocationLabel")}
-            hint={t("bots.create.allocationHint")}
-            value={allocationAmount}
-            onChange={setAllocationAmount}
-            min="50"
-            step="1"
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <NumberFieldWithHint
+              label={t("bots.create.allocationLabel")}
+              hint={t("bots.create.allocationHint")}
+              value={allocationAmount}
+              onChange={setAllocationAmount}
+              min="50"
+              step="1"
+            />
+            {usdtBalance !== null && (
+              <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--ink-soft)" }}>
+                {t("bots.create.availableLabel", { balance: usdtBalance })}
+              </span>
+            )}
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
             <SelectField
               label={t("bots.create.sessionLengthLabel")}

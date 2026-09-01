@@ -13,6 +13,8 @@ from app.models.withdrawal import (
     WithdrawalListResponse,
     WithdrawalRequestBody,
     WithdrawalRequestResponse,
+    WithdrawalResendCodeBody,
+    WithdrawalResendCodeResponse,
     WithdrawalResponse,
 )
 from app.services import withdrawal_fee_service, withdrawal_service
@@ -55,6 +57,23 @@ async def request_withdrawal(body: WithdrawalRequestBody, user: dict = Depends(g
         raise HTTPException(status_code=429, detail=str(exc))
 
     return WithdrawalRequestResponse(**result)
+
+
+@router.post("/resend-code", response_model=WithdrawalResendCodeResponse)
+async def resend_withdrawal_code(body: WithdrawalResendCodeBody, user: dict = Depends(get_current_user)):
+    # Re-sends the OTP for a draft already created by /request — for a user
+    # who didn't get the email, or let it get buried, while still on the OTP
+    # screen. Does not touch the draft's own content or create a new one;
+    # see withdrawal_service.resend_code's docstring for exactly what it
+    # does and doesn't do.
+    try:
+        result = await withdrawal_service.resend_code(user, body.request_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except OtpCooldownError as exc:
+        raise HTTPException(status_code=429, detail=str(exc))
+
+    return WithdrawalResendCodeResponse(**result)
 
 
 @router.post("/confirm", response_model=WithdrawalResponse)

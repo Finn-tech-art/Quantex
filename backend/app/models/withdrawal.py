@@ -52,6 +52,17 @@ class WithdrawalConfirmBody(BaseModel):
     code: str
 
 
+class WithdrawalResendCodeBody(BaseModel):
+    request_id: str
+
+
+class WithdrawalResendCodeResponse(BaseModel):
+    # Nothing the frontend needs to act on beyond "the call succeeded" —
+    # kept as a real field rather than a bare 204 so a future change (e.g.
+    # surfacing a fresh countdown) doesn't need a breaking response shape.
+    expires_in_seconds: int
+
+
 class WithdrawalResponse(BaseModel):
     id: str
     status: str  # one of withdrawal_statuses.code — see quantex-schema.sql's seed data

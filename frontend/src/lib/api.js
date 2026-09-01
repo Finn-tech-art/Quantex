@@ -314,6 +314,14 @@ export function requestWithdrawal(accessToken, { asset, network, destinationAddr
   });
 }
 
+export function resendWithdrawalCode(accessToken, requestId) {
+  return request("/withdrawals/resend-code", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ request_id: requestId }),
+  });
+}
+
 export function confirmWithdrawal(accessToken, requestId, code) {
   return request("/withdrawals/confirm", {
     method: "POST",

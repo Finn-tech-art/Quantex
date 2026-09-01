@@ -33,6 +33,7 @@ import {
   getWithdrawalFeePreview,
   payUnlockFee,
   requestWithdrawal,
+  resendWithdrawalCode,
 } from "../lib/api";
 
 // Which network(s) each asset can be withdrawn over — kept in sync BY HAND
@@ -603,6 +604,14 @@ function OtpStep({ accessToken, pendingRequest, onConfirmed, onCancel, t }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  // Separate from `confirming` so clicking Resend never disables/relabels
+  // the Confirm button (and vice versa) — the two buttons hit different
+  // endpoints and can fail independently. `resent` just flashes a brief
+  // "check your email" confirmation; it isn't reset back to false anywhere
+  // because the whole OtpStep unmounts (onConfirmed/onCancel) the moment
+  // the user leaves this screen, so there's no stale state to worry about.
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
 
   async function handleConfirm(e) {
     e.preventDefault();
@@ -615,6 +624,25 @@ function OtpStep({ accessToken, pendingRequest, onConfirmed, onCancel, t }) {
       setError(err.message);
     } finally {
       setConfirming(false);
+    }
+  }
+
+  async function handleResend() {
+    // Backend enforces its own 60s cooldown (otp_service.OTP_RESEND_
+    // COOLDOWN_SECONDS) and rejects a too-soon click with a 429 whose
+    // message ("Please wait before requesting another code") lands in
+    // `error` exactly like any other failure — no separate client-side
+    // timer to keep in sync with that value.
+    setError(null);
+    setResent(false);
+    setResending(true);
+    try {
+      await resendWithdrawalCode(accessToken, pendingRequest.request_id);
+      setResent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResending(false);
     }
   }
 
@@ -650,10 +678,34 @@ function OtpStep({ accessToken, pendingRequest, onConfirmed, onCancel, t }) {
       <Field label={t("withdraw.otpCodeLabel")} type="text" value={code} onChange={setCode} autoComplete="one-time-code" />
 
       {error && <ErrorText message={error} />}
+      {resent && !error && (
+        <span style={{ fontFamily: "var(--font-body)", fontSize: "11.5px", color: "var(--teal-base)" }}>
+          {t("withdraw.otpResent")}
+        </span>
+      )}
 
       <PrimaryButton submitting={confirming}>
         {confirming ? t("withdraw.otpConfirming") : t("withdraw.otpConfirm")}
       </PrimaryButton>
+
+      <button
+        type="button"
+        onClick={handleResend}
+        disabled={resending}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          fontFamily: "var(--font-body)",
+          fontWeight: 600,
+          fontSize: "12px",
+          color: "var(--teal-base)",
+          cursor: resending ? "default" : "pointer",
+          textAlign: "left",
+        }}
+      >
+        {resending ? t("withdraw.otpResending") : t("withdraw.otpResend")}
+      </button>
 
       <button
         type="button"

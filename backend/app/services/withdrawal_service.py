@@ -334,6 +334,53 @@ async def create_request(
     }
 
 
+async def resend_code(user: dict, request_id: str) -> dict:
+    """Re-sends the OTP for an already-created draft — for the user who
+    didn't get the email, or let the 10-minute window (DRAFT_TTL_SECONDS)
+    run down while still on the OTP screen. Does NOT create a new draft or
+    change any of its stored fields (amount/network/destination/fee) — it
+    just reads the same draft create_request() already wrote and calls
+    generate_and_send_otp() again, which overwrites the old code with a
+    fresh one (the old code stops working the moment this succeeds) and
+    restarts otp_service's own OTP_RESEND_COOLDOWN_SECONDS/OTP_MAX_ATTEMPTS
+    bookkeeping for this identifier. Raises OtpCooldownError (from
+    generate_and_send_otp) if called again before that cooldown elapses —
+    the router maps that to a 429, same as create_request already does.
+    Raises WithdrawalValidationError if the draft has expired or belongs to
+    someone else, same messages/checks as confirm_request uses."""
+    r = get_redis()
+    raw = await r.get(_draft_key(request_id))
+    if raw is None:
+        raise WithdrawalValidationError("This withdrawal request has expired — please start again")
+    draft = json.loads(raw)
+
+    if draft["user_id"] != user["id"]:
+        raise WithdrawalValidationError("This withdrawal request does not belong to your account")
+
+    amount = Decimal(draft["amount"])
+    fee_amount = Decimal(draft["fee_amount"])
+    net_amount = amount - fee_amount
+
+    await generate_and_send_otp(
+        purpose=PURPOSE_WITHDRAWAL_CONFIRMATION,
+        identifier=request_id,
+        email=user["email"],
+        subject="Confirm your Quantex withdrawal",
+        heading=f"Confirm withdrawal of {amount} {draft['asset']}",
+        # Same details table as create_request's original email — see that
+        # function's own comment for why it's shown at all.
+        details=[
+            ("Amount", f"{amount} {draft['asset']}"),
+            ("Network", draft["network"]),
+            ("Destination", draft["destination_address"]),
+            ("Fee", f"{fee_amount} {draft['asset']}"),
+            ("You'll receive", f"{net_amount} {draft['asset']}"),
+        ],
+    )
+
+    return {"expires_in_seconds": DRAFT_TTL_SECONDS}
+
+
 async def confirm_request(user: dict, request_id: str, code: str) -> dict:
     """Step 2 — verifies the OTP against the Redis draft's id, then (only on
     success) inserts the real `withdrawals` row as PENDING and deletes the

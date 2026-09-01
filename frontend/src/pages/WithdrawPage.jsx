@@ -133,22 +133,43 @@ export default function WithdrawPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, unlockFees]);
 
-  // Same reasoning as the unlock-fees poll just above: an admin approving or
-  // rejecting a request (see withdrawal_service.approve_withdrawal /
-  // reject_withdrawal) happens from a completely separate admin session, so
-  // nothing pushes that change to this tab on its own. Without this, "Your
-  // withdrawal requests" below would keep showing PROCESSING until the user
-  // manually reloads the page, even though the request was already decided.
-  // Stops on its own once every request this user has is in a terminal
-  // state — no open request left to watch, no reason to keep polling.
+  // Backstop for the WebSocket below: an admin approving/rejecting a
+  // request happens from a completely separate admin session, so normally
+  // nothing pushes that change to this tab except the instant push the
+  // effect below sets up. This just guards against the socket having
+  // silently dropped (a network hiccup, a backgrounded tab, sleep/wake) —
+  // in the common case the WS message arrives first and this fetches the
+  // exact same already-current data a few seconds later as a no-op re-
+  // render. Stops on its own once every request this user has is in a
+  // terminal state — no open request left to watch, no reason to keep
+  // polling. 20s (not the unlock-fees poll's 5s above) because this is
+  // purely a backstop, not the primary update path.
   useEffect(() => {
     if (!myWithdrawals) return;
     const hasOpenRequest = myWithdrawals.some((w) => !TERMINAL_WITHDRAWAL_STATUSES.has(w.status));
     if (!hasOpenRequest) return;
-    const interval = setInterval(refreshWithdrawals, 5000);
+    const interval = setInterval(refreshWithdrawals, 20000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, myWithdrawals]);
+
+  // The actual real-time path: routers/withdrawals.py's /withdrawals/ws
+  // pushes one message the instant an admin approves or rejects this
+  // user's request (see withdrawal_service._publish_status_update), same
+  // Redis-pub/sub-over-WebSocket mechanism DepositPage.jsx's own /deposits/
+  // ws already uses for live deposit credits. The payload's actual content
+  // is never read here — any message means "your withdrawal list just
+  // changed," so this just refetches it, same as UnlockFeeCard's polling
+  // does after a payment lands. One connection per mount; closed on
+  // unmount. If it drops, the poll above still catches the change within
+  // 20s — this isn't the only path, just the fast one.
+  useEffect(() => {
+    if (!accessToken) return;
+    const ws = new WebSocket(`${WS_BASE}/withdrawals/ws?token=${accessToken}`);
+    ws.onmessage = refreshWithdrawals;
+    return () => ws.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken]);
 
   function handleRequested(result, formInputs) {
     setPendingRequest({ ...result, ...formInputs });

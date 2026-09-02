@@ -38,6 +38,9 @@ const resources = {
       wallet: {
         title: 'Wallet',
         totalBalance: 'Total Balance',
+        // Same "≈ X USDT" caption HomePage's hero card shows — see that
+        // key's own comment in the home.hero block above.
+        equivalent: '≈ {{amount}} USDT',
         deposit: 'Deposit',
         withdraw: 'Withdraw',
         history: 'History',
@@ -457,6 +460,12 @@ const resources = {
           // currently selected (e.g. "7D", "90D") — see HomePage.jsx's
           // RANGE_OPTIONS list for the exact label text per range.
           deltaSuffix: ' ({{range}})',
+          // The small "≈ X USDT" caption under the main balance figure —
+          // {{amount}} is always the USD/USDT total (see totalUsdValue()
+          // in lib/currency.js), regardless of which currency the picker
+          // above is set to, so it reads as a stable reference value even
+          // when the big figure itself is showing e.g. a BTC amount.
+          equivalent: '≈ {{amount}} USDT',
         },
         quickActions: {
           deposit: 'Deposit',

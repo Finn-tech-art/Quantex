@@ -147,6 +147,7 @@ export default function HomePage() {
 
         <HeroCard
           displayValue={displayValue}
+          totalUsd={totalUsd}
           currency={currency}
           onCurrencyChange={setCurrency}
           history={history}
@@ -210,7 +211,7 @@ const RANGE_OPTIONS = [
   { value: "180d", label: "180D" },
 ];
 
-function HeroCard({ displayValue, currency, onCurrencyChange, history, range, onRangeChange, balanceHidden, onToggleBalanceHidden, t }) {
+function HeroCard({ displayValue, totalUsd, currency, onCurrencyChange, history, range, onRangeChange, balanceHidden, onToggleBalanceHidden, t }) {
   const loading = displayValue === null || history === null;
   const firstClose = history && history.length > 0 ? Number(history[0].close) : null;
   const lastClose = history && history.length > 0 ? Number(history[history.length - 1].close) : null;
@@ -255,6 +256,24 @@ function HeroCard({ displayValue, currency, onCurrencyChange, history, range, on
       ) : (
         <>
           <BalanceFigure key={currency} value={displayValue} currency={currency} hidden={balanceHidden} />
+
+          {/* Bybit-style "≈ X USDT" caption — always the USD/USDT total
+              (see totalUsdValue() in lib/currency.js, and lib/currency.js's
+              STABLECOIN_ASSETS treating USDT 1:1 with USD), regardless of
+              which currency the picker above is set to. `totalUsd` can
+              still be null for a tick after balances resolve if it's
+              waiting on one more asset's live price, so this is gated
+              separately from the main `loading` check above rather than
+              assumed to be ready whenever displayValue is. */}
+          {totalUsd != null && (
+            <span style={{ fontFamily: "var(--font-data)", fontSize: "11px", color: "var(--teal-sage)" }}>
+              {balanceHidden
+                ? "••••••"
+                : t("home.hero.equivalent", {
+                    amount: totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                  })}
+            </span>
+          )}
 
           {history.length > 1 && <Sparkline points={history} color={isUp ? "var(--gain-on-dark)" : "var(--loss)"} />}
 

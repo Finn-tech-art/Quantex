@@ -52,6 +52,7 @@ export default function WalletPage() {
 
         <HeroCard
           displayValue={displayValue}
+          totalUsd={totalUsd}
           currency={currency}
           onCurrencyChange={setCurrency}
           loading={displayValue === null}
@@ -121,7 +122,7 @@ function ActionPill({ label, onClick, disabled }) {
   );
 }
 
-function HeroCard({ displayValue, currency, onCurrencyChange, loading, onWithdrawClick, onHistoryClick, t }) {
+function HeroCard({ displayValue, totalUsd, currency, onCurrencyChange, loading, onWithdrawClick, onHistoryClick, t }) {
   // Coin-equivalent amounts need more decimal places than a dollar figure
   // to read as meaningful (e.g. "0.001846 BTC" rather than "0.00 BTC") —
   // same threshold HomePage's own BalanceFigure uses.
@@ -155,11 +156,29 @@ function HeroCard({ displayValue, currency, onCurrencyChange, loading, onWithdra
       {loading ? (
         <AnimatedPsi mode="working" size={26} color="var(--on-accent)" />
       ) : (
-        <span style={{ fontFamily: "var(--font-data)", fontWeight: 600, fontSize: "28px", color: "var(--on-accent)" }}>
-          {currency === "USD"
-            ? `$${displayValue.toFixed(decimals)}`
-            : `${displayValue.toFixed(decimals)} ${currency}`}
-        </span>
+        <>
+          <span style={{ fontFamily: "var(--font-data)", fontWeight: 600, fontSize: "28px", color: "var(--on-accent)" }}>
+            {currency === "USD"
+              ? `$${displayValue.toFixed(decimals)}`
+              : `${displayValue.toFixed(decimals)} ${currency}`}
+          </span>
+
+          {/* Bybit-style "≈ X USDT" caption — always the USD/USDT total
+              (see totalUsdValue() in lib/currency.js, and that file's
+              STABLECOIN_ASSETS treating USDT 1:1 with USD), regardless of
+              which currency the picker above is set to. `totalUsd` can
+              still be null for a tick after balances resolve if it's
+              waiting on one more asset's live price, so this is gated
+              separately from `loading` rather than assumed ready whenever
+              displayValue is. */}
+          {totalUsd != null && (
+            <span style={{ fontFamily: "var(--font-data)", fontSize: "11px", color: "var(--teal-sage)" }}>
+              {t("wallet.equivalent", {
+                amount: totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+              })}
+            </span>
+          )}
+        </>
       )}
 
       <div style={{ display: "flex", gap: "var(--space-4)" }}>

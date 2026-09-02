@@ -39,9 +39,12 @@ logger = logging.getLogger(__name__)
 FEE_RATE = Decimal("0.001")
 
 # Every pair the Trade screen offers has to have a live price — i.e. its
-# Binance symbol must also be in market_data_feed.py's TRACKED_SYMBOLS, or
-# get_current_price() below will 503 forever for it. Keep these two lists
-# in sync; add a pair here AND there together, never just one.
+# Binance symbol must also be in market_data_feed.py's
+# ALWAYS_STREAMED_SYMBOLS, or get_current_price() below will 503 forever for
+# it (the dynamic active-bot streams in manage_bot_symbol_streams() aren't
+# enough on their own, since manual trading needs a price even when no bot
+# is running). Keep these two lists in sync; add a pair here AND there
+# together, never just one.
 SUPPORTED_PAIRS = {"BTC/USDT", "ETH/USDT", "SOL/USDT"}
 
 

@@ -8,10 +8,12 @@
 import asyncio
 import json
 import logging
+import random
 
 import httpx
 import websockets
 
+from app.services import bot_service
 from app.services.redis_client import get_redis, get_redis_sync
 
 # Standard Python logger. When this runs as its own process
@@ -41,12 +43,51 @@ BINANCE_WS_BASE = "wss://stream.binance.com:9443/ws"
 # must never be touched by Markets-page changes.
 BINANCE_ALL_TICKERS_URL = "https://api.binance.com/api/v3/ticker/24hr"
 
-# How often poll_all_tickers() below re-fetches the whole market from
-# Binance. Lower this for a fresher Markets page at the cost of more
+# How often poll_all_tickers() below fetches the REAL market snapshot from
+# Binance and writes it into both _latest_real_tickers (in-process memory)
+# and Redis. Lower this for fresher real prices at the cost of more
 # requests to Binance's public REST API (no API key/auth involved, but
-# Binance still rate-limits by IP — 10s comfortably avoids that for a
-# single hobby deployment); raise it to poll less aggressively.
-ALL_MARKET_POLL_INTERVAL_SECONDS = 10
+# Binance still rate-limits by IP) AND more Redis writes (Upstash bills per
+# command) — this key is one big ~683-symbol JSON blob rewritten wholesale
+# every tick, so this constant directly sets that write's frequency. 300s
+# (5 minutes) trades "the underlying real price can be up to 5 minutes
+# stale" for a big cut in both Binance requests and Redis writes — the
+# jitter_all_tickers() loop just below fills the gap between real fetches
+# by making the displayed numbers wobble every MARKET_JITTER_INTERVAL_SECONDS
+# so the Markets page (and anything reading this same cache, like the
+# Wallet/Home USDT-equivalent balance figure) still looks alive between
+# real refreshes rather than sitting frozen for 5 minutes. Nothing here
+# feeds bot trading decisions (see this function's own docstring) — bots
+# always read the separate, never-jittered price:{SYMBOL} keys stream_price()
+# writes below. Lower this back toward 10s if 5-minute-stale real prices
+# ever feels wrong; raise it further for even fewer Binance/Redis calls.
+ALL_MARKET_POLL_INTERVAL_SECONDS = 300
+
+# How often jitter_all_tickers() below recomputes a fake "still moving"
+# snapshot from the last REAL fetch and writes it into the same Redis key
+# the real poll uses — purely cosmetic, so the Markets page (and the
+# Wallet/Home balance total, which reads this same cache) never sits
+# perfectly still for the full 5-minute gap between real Binance fetches.
+# Lower this for a livelier-feeling tick rate; raising it saves Redis writes
+# at the cost of a less "alive" looking feed.
+MARKET_JITTER_INTERVAL_SECONDS = 10
+
+# The maximum fraction jitter_all_tickers() nudges each price up or down,
+# per tick, e.g. 0.0015 = up to ±0.15%. Every jitter tick is computed fresh
+# from the last REAL price (never from the previous jittered value), so
+# this is how far a displayed price can ever drift from the real one — it
+# can't run away over time, it just wobbles within this band until the next
+# real fetch replaces the baseline. Raise this for a more dramatic-looking
+# wobble; lower it for a subtler one.
+MARKET_JITTER_MAX_PCT = 0.0015
+
+# The last REAL (non-jittered) ticker snapshot poll_all_tickers() fetched,
+# kept in this process's own memory so jitter_all_tickers() always has a
+# real baseline to wobble around — never read back from Redis itself (that
+# key holds whatever the last WRITE was, real or jittered, so it can't be
+# trusted as "the real value" once jittering has run at least once).
+# Starts as None until the very first real poll completes.
+_latest_real_tickers: list[dict] | None = None
 
 # Only symbols quoted in USDT are shown on the Markets page — that's the
 # standard "market list" convention (prices read directly as a USD figure)
@@ -122,9 +163,13 @@ def _price_key(symbol: str) -> str:
 async def get_latest_price(symbol: str) -> str | None:
     """Reads the most recent price written by stream_price() below, for
     whichever symbol you ask for (e.g. "BTCUSDT"). Returns None if nothing
-    has ever been written for that symbol yet (feed not running, or this
-    symbol isn't in TRACKED_SYMBOLS in market_data_feed.py). Async version —
-    for use from FastAPI routes (which are async)."""
+    has ever been written for that symbol yet — feed not running, or this
+    symbol is neither always-streamed (market_data_feed.py's
+    ALWAYS_STREAMED_SYMBOLS) nor currently used by an active bot
+    (manage_bot_symbol_streams() above only starts a stream once it sees
+    one, and that can take up to DYNAMIC_STREAM_CHECK_INTERVAL_SECONDS after
+    the bot goes active). Async version — for use from FastAPI routes (which
+    are async)."""
     r = get_redis()
     return await r.get(_price_key(symbol))
 
@@ -149,9 +194,15 @@ async def stream_price(symbol: str) -> None:
     Runs as an infinite loop and never returns normally: if the connection
     drops (network blip, Binance restarting, etc.) it logs the error, waits
     5 seconds, and reconnects automatically rather than crashing the whole
-    process. To track a different or additional symbol, don't edit this
-    function — add/change entries in TRACKED_SYMBOLS in market_data_feed.py,
-    which calls this once per symbol."""
+    process — UNLESS it's cancelled from outside (asyncio.Task.cancel()),
+    which is how manage_bot_symbol_streams() above stops a stream once no
+    active bot needs it anymore; CancelledError isn't an Exception so it
+    isn't caught by this reconnect logic, it just propagates and ends the
+    task. To track a different permanently-on symbol, edit
+    ALWAYS_STREAMED_SYMBOLS in market_data_feed.py; a symbol only needed
+    while a bot is active on it doesn't need editing anywhere — see
+    manage_bot_symbol_streams() above for how those start/stop on their
+    own."""
 
     # Binance's stream-name convention is always lowercase, e.g.
     # "btcusdt@ticker" — "@ticker" specifically means "24hr rolling ticker
@@ -303,12 +354,149 @@ async def poll_all_tickers() -> None:
                         "quote_volume": entry["quoteVolume"],   # 24hr quote-asset (USDT) volume — used to sort by "most traded"
                     })
 
+                # Keep this REAL snapshot in memory too (not just Redis) —
+                # jitter_all_tickers() below reads it as the baseline to
+                # wobble around. `global` is needed here because this
+                # assigns to the module-level name rather than reading it;
+                # without it Python would treat `_latest_real_tickers` as a
+                # new local variable instead of updating the shared one.
+                global _latest_real_tickers
+                _latest_real_tickers = filtered
+
                 # Overwrite the whole cached list every poll, same
                 # "latest snapshot only" approach as stream_price()'s
                 # price:{SYMBOL} keys — no history is kept here either.
+                # This is deliberately still written even though
+                # jitter_all_tickers() will likely overwrite it again within
+                # MARKET_JITTER_INTERVAL_SECONDS — it means the REAL price is
+                # visible immediately after every real fetch rather than
+                # waiting on the next jitter tick to show anything at all.
                 await r.set(_ALL_TICKERS_KEY, json.dumps(filtered))
                 logger.info("Refreshed Markets-page ticker cache (%d symbols)", len(filtered))
             except Exception:
                 logger.exception("Failed to refresh Markets-page tickers, retrying in %ds", ALL_MARKET_POLL_INTERVAL_SECONDS)
 
             await asyncio.sleep(ALL_MARKET_POLL_INTERVAL_SECONDS)
+
+
+async def jitter_all_tickers() -> None:
+    """Runs forever alongside poll_all_tickers() above, on its own much
+    faster timer (MARKET_JITTER_INTERVAL_SECONDS), and makes the Markets-page
+    cache look like it's continuously moving between poll_all_tickers()'s
+    real 5-minute fetches — purely cosmetic, so a human glancing at the
+    Markets page (or the Wallet/Home balance total, which reads this exact
+    same cache — see currency.js on the frontend) sees numbers that tick
+    every few seconds instead of sitting frozen for up to 5 minutes at a
+    stretch.
+
+    Every tick is computed fresh from _latest_real_tickers (the last REAL
+    fetch), never from the previous jittered write — that's what keeps this
+    a bounded wobble around a real number instead of a random walk that
+    could drift arbitrarily far from reality over many ticks. The real
+    price is always at most MARKET_JITTER_MAX_PCT away from whatever's
+    displayed at any moment.
+
+    Only the "price" field is jittered. "change_percent"/"high"/"low" are
+    left as Binance's real values — recomputing them to match a fake price
+    would need the real 24h-ago open price, which this cache doesn't keep,
+    so they can very occasionally look very slightly inconsistent with a
+    jittered price (e.g. price nudged a hair above "high"). That's an
+    acceptable cosmetic quirk here, not a bug worth the extra complexity of
+    tracking open prices just to fix it.
+
+    Does nothing on ticks before the very first real poll has landed
+    (_latest_real_tickers still None) — there's nothing to wobble around
+    yet, and get_all_tickers() already handles "no data yet" as a 503 for
+    that brief startup window."""
+    r = get_redis()
+    while True:
+        await asyncio.sleep(MARKET_JITTER_INTERVAL_SECONDS)
+        if _latest_real_tickers is None:
+            continue
+
+        try:
+            jittered = []
+            for entry in _latest_real_tickers:
+                real_price = float(entry["price"])
+                # random.uniform(-MAX, MAX) picks a fraction anywhere in
+                # that band, e.g. -0.0015 to +0.0015 — multiplying the real
+                # price by (1 + that fraction) is what actually moves it up
+                # or down. `:.8f` matches the decimal precision Binance's
+                # own price strings already use, so the frontend (which
+                # just displays this string) sees nothing unusual.
+                wobble = 1 + random.uniform(-MARKET_JITTER_MAX_PCT, MARKET_JITTER_MAX_PCT)
+                jittered.append({**entry, "price": f"{real_price * wobble:.8f}"})
+
+            await r.set(_ALL_TICKERS_KEY, json.dumps(jittered))
+        except Exception:
+            # Same "log and keep going" shape as everywhere else in this
+            # file — a single bad tick here (e.g. a malformed price string)
+            # should never take down the whole feed process, and the next
+            # tick 10s later will just try again.
+            logger.exception("Failed to jitter Markets-page tickers")
+
+
+# How often manage_bot_symbol_streams() below re-checks which symbols have
+# an active bot on them. A newly-active bot on a new symbol has to wait up
+# to this long before its price stream actually starts (bot_engine.py just
+# logs "no live price yet" and skips that bot's evaluation each tick until
+# then, exactly like a brief market_data_feed restart would) — lower this
+# for that gap to close faster, at the cost of one extra Supabase query per
+# tick either way (cheap; Supabase, not Redis, so it doesn't affect the
+# Upstash request count this whole exercise is about).
+DYNAMIC_STREAM_CHECK_INTERVAL_SECONDS = 60
+
+
+async def manage_bot_symbol_streams(always_streamed: set[str]) -> None:
+    """Keeps exactly one live stream_price() task running for every symbol
+    that currently has at least one ACTIVE, non-simulated bot on it, beyond
+    the `always_streamed` set (BTCUSDT/ETHUSDT/SOLUSDT — market_data_feed.py
+    starts those permanently on its own, since the manual Trade screen needs
+    them live regardless of whether any bot happens to be running).
+
+    Simulated bots are deliberately excluded from "wanted" — they get their
+    price data from fetch_klines() one-shot REST pulls
+    (fake_trading_service.py), never from this live stream, so a symbol used
+    only by a simulated bot shouldn't cost a WebSocket connection here.
+
+    Every DYNAMIC_STREAM_CHECK_INTERVAL_SECONDS this re-reads the active-bot
+    list from Supabase (via asyncio.to_thread — bot_service's Supabase calls
+    are synchronous, and running one directly here would stall every other
+    coroutine in this process, including the always-on BTC/ETH/SOL streams,
+    for however long that query takes) and diffs the currently-wanted symbol
+    set against whichever symbols already have a running task: starts a new
+    stream_price() task for anything newly wanted, and cancels the task for
+    anything no longer wanted. asyncio.Task.cancel() raises CancelledError
+    inside stream_price()'s loop, which is a BaseException (not Exception),
+    so it passes straight through that function's `except Exception:`
+    reconnect handler instead of being caught and retried — the stream just
+    stops cleanly, as intended.
+
+    If the Supabase lookup itself fails (network blip, etc.), this leaves
+    whatever streams are already running untouched rather than tearing them
+    all down over one failed check — same "a transient failure shouldn't
+    cause a worse outcome than doing nothing" principle used everywhere else
+    in this file."""
+    running: dict[str, asyncio.Task] = {}
+
+    while True:
+        try:
+            active_bots = await asyncio.to_thread(bot_service.list_active_bots)
+            wanted = {
+                bot["pair"].replace("/", "")  # "BTC/USDT" -> "BTCUSDT", same conversion used throughout the routers/services layer
+                for bot in active_bots
+                if not bot.get("is_simulated")
+            } - always_streamed
+        except Exception:
+            logger.exception("Failed to look up active bots for dynamic price streams, leaving existing streams as-is")
+            wanted = set(running.keys())
+
+        for symbol in wanted - running.keys():
+            running[symbol] = asyncio.create_task(stream_price(symbol))
+            logger.info("Started dynamic price stream for %s (active bot detected)", symbol)
+
+        for symbol in running.keys() - wanted:
+            running.pop(symbol).cancel()
+            logger.info("Stopped dynamic price stream for %s (no active bot uses it anymore)", symbol)
+
+        await asyncio.sleep(DYNAMIC_STREAM_CHECK_INTERVAL_SECONDS)

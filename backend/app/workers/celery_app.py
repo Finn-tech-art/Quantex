@@ -9,6 +9,22 @@ celery_app = Celery("quantex", broker=settings.redis_url, backend=settings.redis
 celery_app.conf.timezone = "UTC"
 celery_app.conf.broker_connection_retry_on_startup = True
 
+# By default Celery writes every task's return value into the result
+# backend (Redis, here) so that whoever queued it could later call
+# task.get() / AsyncResult(task_id).get() to read it back. Nowhere in this
+# codebase ever does that — every .delay()/.apply_async() call site only
+# ever reads task.id (for logging/tracking, e.g. custody_service.py's sweep
+# queueing), never the result value itself. That makes every one of those
+# result-backend writes pure waste: two beat tasks alone
+# (bot-engine-sweep every 15s, simulated-bot-engine-sweep every 10s, see
+# beat_schedule below) tick forever whether or not there's anything to do,
+# each one silently costing a Redis write for a value nobody will ever
+# fetch. `task_ignore_result = True` turns that off globally — if a future
+# task ever DOES need its result read back (e.g. an admin action that waits
+# on a sweep's outcome), override it per-task with
+# @celery_app.task(ignore_result=False) rather than flipping this back.
+celery_app.conf.task_ignore_result = True
+
 if urlparse(settings.redis_url).scheme == "rediss":
     # Upstash (and most managed Redis) requires TLS. Celery's redis transport
     # refuses to start on a rediss:// URL unless ssl_cert_reqs is spelled out

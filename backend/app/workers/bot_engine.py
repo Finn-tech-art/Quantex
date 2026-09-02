@@ -60,9 +60,12 @@ def _evaluate_one_bot(bot: dict) -> None:
     price_str = get_latest_price_sync(symbol)
     if price_str is None:
         # No price yet almost always means market_data_feed.py either isn't
-        # running, or hasn't been told to track this symbol in its
-        # TRACKED_SYMBOLS list — nothing this bot can do about that itself,
-        # so just wait for the next sweep rather than erroring.
+        # running, or its manage_bot_symbol_streams() loop hasn't picked up
+        # this bot going active yet (can take up to
+        # DYNAMIC_STREAM_CHECK_INTERVAL_SECONDS after the bot starts — see
+        # that function's docstring in binance_market_service.py) — nothing
+        # this bot can do about that itself, so just wait for the next
+        # sweep rather than erroring.
         logger.warning("No live price yet for %s — skipping bot %s this tick", symbol, bot["id"])
         return
 

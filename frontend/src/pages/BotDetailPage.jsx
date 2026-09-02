@@ -54,14 +54,17 @@ export default function BotDetailPage() {
   // WebSocket below, NEVER fetched from the backend and never persisted
   // (bot_fills has no THINKING row for these), so this is the one piece of
   // feed content that lives only in this component's own state. Newest
-  // first, same order as `fills`. Cleared by refresh() below, since a real
-  // fetch (a new fill, or the poll timer) always supersedes whatever was
-  // being "thought" before it.
+  // first, same order as `fills`. Kept for the whole session on purpose —
+  // NOT cleared by refresh() (a poll tick or a real fill used to wipe this
+  // list every time, which meant most of a bot's narration never stayed on
+  // screen long enough to read). Only cleared when a genuinely new session
+  // starts (the "session_started" WS event, see the onmessage handler
+  // below) or when this page switches to a different bot (see the effect
+  // right below this one).
   const [liveThoughts, setLiveThoughts] = useState([]);
 
   function refresh() {
     if (!accessToken) return;
-    setLiveThoughts([]);
     getBotDetail(accessToken, botId).then(setDetail);
     getBotFills(accessToken, botId).then((res) => setFills(res.fills));
     getBotChart(accessToken, botId)
@@ -73,6 +76,14 @@ export default function BotDetailPage() {
   // change, e.g. navigating from one bot straight to another).
   useEffect(refresh, [accessToken, botId]);
 
+  // Starting fresh on a different bot shouldn't carry over the previous
+  // bot's thinking log — refresh() above no longer clears this on its own
+  // (see liveThoughts' own comment), so this is the one place that still
+  // needs to reset it on a bot switch.
+  useEffect(() => {
+    setLiveThoughts([]);
+  }, [botId]);
+
   // Open exactly one WebSocket for this bot, for as long as this page is
   // open. Most messages (a real fill, or a simulated session starting) mean
   // "something changed server-side" and we simply re-fetch every piece of
@@ -81,8 +92,12 @@ export default function BotDetailPage() {
   // scale). A THINKING message (see simulated_bot_engine.py's
   // _publish_thinking) is the one exception: it never becomes a real
   // bot_fills row, so there's nothing to re-fetch — it's appended straight
-  // into liveThoughts instead, capped at 10 so a long-idle session can't
-  // grow this list without bound.
+  // into liveThoughts instead, kept for the rest of the session (see that
+  // state's own comment on why this no longer caps or clears it on every
+  // message). "session_started" (see simulated_bot_engine.py's
+  // _publish_session_started) is the one event that DOES still clear it —
+  // a genuinely new session starting is the one legitimate reset point,
+  // same as switching to a different bot.
   useEffect(() => {
     if (!accessToken || !botId) return;
     const ws = new WebSocket(`${WS_BASE}/bots/${botId}/ws?token=${accessToken}`);
@@ -95,10 +110,14 @@ export default function BotDetailPage() {
         return;
       }
       if (data.side === "THINKING") {
-        setLiveThoughts((prev) =>
-          [{ side: "THINKING", reasoning_text: data.reasoning_text, created_at: new Date().toISOString() }, ...prev].slice(0, 10)
-        );
+        setLiveThoughts((prev) => [
+          { side: "THINKING", reasoning_text: data.reasoning_text, created_at: new Date().toISOString() },
+          ...prev,
+        ]);
       } else {
+        if (data.event === "session_started") {
+          setLiveThoughts([]);
+        }
         refresh();
       }
     };

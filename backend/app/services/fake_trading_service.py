@@ -252,7 +252,19 @@ def generate_fake_trading_result(
     session_is_win = rng.random() < win_rate
 
     if session_is_win:
-        return_pct = target_min_return + rng.uniform(0.00, 0.15)
+        # Swings both ABOVE and BELOW target_min_return — sometimes by a
+        # small margin, sometimes by a large one — rather than the old
+        # target_min_return + uniform(0, 0.15), which only ever floored at
+        # the admin's number and crept up from there. The swing is sized as
+        # a FRACTION of target_min_return itself (+/-50%), not a fixed
+        # absolute band, so a big admin-configured target still gets
+        # proportionally big swings and a small one gets small swings. The
+        # 0.01 floor only ever matters if an admin sets a very small
+        # target_min_return — under the default 0.40 it's never actually
+        # reached (worst case swing is -0.20, i.e. 0.20 return, well clear
+        # of the floor) — it exists purely so a "win" can never mathematically
+        # come out zero or negative, which would contradict session_is_win.
+        return_pct = max(0.01, target_min_return + rng.uniform(-0.5, 0.5) * target_min_return)
     else:
         return_pct = -rng.uniform(0.05, 0.20)
 
@@ -369,9 +381,94 @@ def generate_fake_trading_result(
                     best_candidate, best_abs_delta = candidate, abs(delta)
         return best_candidate if best_candidate is not None else first_candidate
 
+    def _sourced_prices(buy_offset_s: int, want_positive: bool, prefer_strong: bool) -> tuple[float, float, int]:
+        """Returns (buy_price, sell_price, sell_offset_s) for one trip —
+        real Binance prices when available, a small realistic synthetic
+        move otherwise. Factored out of the old inline loop body so every
+        trip-building path in this function (the weight-based _build_trip
+        below, still used by _generate_trips() for a losing session, and
+        the planned-pnl _build_planned_trip below, used by
+        _generate_scripted_win_trips() for a winning session) sources
+        prices exactly the same way — neither decides HOW a price is
+        sourced, only WHEN (buy_offset_s), which DIRECTION it should go
+        (want_positive), and how hard to search for a strong vs weak real
+        match (prefer_strong)."""
+        if real_series is not None:
+            sell_offset_s = _find_real_sell_offset(buy_offset_s, want_positive, prefer_strong=prefer_strong)
+            return real_series[buy_offset_s], real_series[sell_offset_s], sell_offset_s
+
+        # No real price history for this window (offline, Binance
+        # rate-limited, etc.) — pick a small, REALISTIC price move instead
+        # (see FALLBACK_MIN/MAX_TRIP_MOVE_PCT's own comment above for
+        # exactly how small, and how to change it), then treat it exactly
+        # like a real one from here on: FIXED once chosen, never re-solved
+        # later from the scaled target. This is what stops a single fake
+        # trade from ever showing an absurd price swing (e.g. the ~80%
+        # "loss" on one SELL that prompted this whole v4 change — see the
+        # module docstring).
+        hold_duration = rng.uniform(25.0, min(70.0, base_interval * 0.75))
+        sell_offset_s = int(min(session_seconds - 10.0, buy_offset_s + hold_duration))
+        # Anchored to chart_start_price (the real price this session
+        # actually started at, when a real fetch succeeded at all — see
+        # chart_start_price's own comment above) rather than the raw
+        # initial_price parameter directly. This matters for the v5 case
+        # below: a session that fetched real data fine but later falls
+        # back here anyway (because the real trend fought the scripted
+        # target too hard) still anchors its synthetic prices to a
+        # genuinely recent real price instead of the stale hardcoded
+        # $75,000 default callers never override (see
+        # simulated_bot_engine.py's call site, which never passes
+        # initial_price). When no real fetch ever succeeded,
+        # chart_start_price already just equals initial_price, so this is
+        # a no-op change for that case.
+        buy_price = chart_start_price * rng.uniform(0.991, 1.009)
+        move_pct = rng.uniform(FALLBACK_MIN_TRIP_MOVE_PCT, FALLBACK_MAX_TRIP_MOVE_PCT)
+        sell_price = buy_price * ((1 + move_pct) if want_positive else (1 - move_pct))
+        return buy_price, sell_price, sell_offset_s
+
+    def _build_trip(buy_offset_s: int, want_positive: bool, prefer_strong: bool, weight_mult: float = 1.0) -> dict:
+        """A WEIGHT-based trip, used by _generate_trips() (the fully-random
+        shape, still used for a losing session) — weight_qty is a nominal
+        "how big a slice of this bot's allocation" basis, used ONLY to
+        weight how much this trip contributes relative to the others before
+        the session-wide `scale` step (see the fills loop below) normalizes
+        everything to target_total_pnl. This works fine for 8-12 evenly-
+        weighted trips (see _generate_scripted_win_trips' own docstring for
+        why it does NOT work well for that shape's few, deliberately lumpy
+        trips — that path uses _build_planned_trip below instead, which
+        solves quantity directly rather than leaning on a shared scale)."""
+        buy_price, sell_price, sell_offset_s = _sourced_prices(buy_offset_s, want_positive, prefer_strong)
+        weight_qty = (alloc_per_level / buy_price) * weight_mult
+        raw_pnl = weight_qty * (sell_price - buy_price)
+        return dict(buy_price=buy_price, sell_price=sell_price, raw_pnl=raw_pnl,
+                    weight_qty=weight_qty, buy_offset_s=buy_offset_s, sell_offset_s=sell_offset_s)
+
+    def _build_planned_trip(buy_offset_s: int, planned_pnl: float, want_positive: bool, prefer_strong: bool) -> dict:
+        """A PLANNED-PNL trip, used by _generate_scripted_win_trips() —
+        solves weight_qty directly from planned_pnl and this trip's own
+        (already-fixed) price delta, rather than an arbitrary weight later
+        normalized by a SHARED scale factor across every trip. See that
+        function's own docstring for why this matters: with only a
+        handful of deliberately different-sized trips, two large ones can
+        easily net close to zero raw P&L by pure chance, which would force
+        a shared scale factor sky-high and blow up every trip's size along
+        with it (observed live in testing — a $500 allocation showing a
+        ~$1,800 single "trade"). Solving quantity per-trip from a planned
+        dollar amount sidesteps that failure mode entirely: this trip's
+        size never depends on any other trip's luck."""
+        buy_price, sell_price, sell_offset_s = _sourced_prices(buy_offset_s, want_positive, prefer_strong)
+        price_delta = sell_price - buy_price
+        # The 1e-9 guard is purely defensive (a real market or the fallback
+        # move_pct floor should never actually produce a near-zero delta) —
+        # falls back to an allocation-sized quantity rather than exploding
+        # if it somehow ever did.
+        weight_qty = (planned_pnl / price_delta) if abs(price_delta) > 1e-9 else alloc_per_level / buy_price
+        raw_pnl = weight_qty * price_delta
+        return dict(buy_price=buy_price, sell_price=sell_price, raw_pnl=raw_pnl,
+                    weight_qty=weight_qty, buy_offset_s=buy_offset_s, sell_offset_s=sell_offset_s)
+
     def _generate_trips():
         trips = []
-        pnl_sum = 0.0
         for i in range(num_trips):
             # Spread fills across the window with slight jitter.
             buy_offset_s = base_interval * (i + 1) + rng.uniform(
@@ -387,72 +484,134 @@ def generate_fake_trading_result(
             # losing trades along the way (and vice versa for a losing
             # session) — a realistic mixed look either branch produces.
             want_positive = (rng.random() < 0.70) if session_is_win else (rng.random() < 0.30)
+            # This trip is "majority" (should dominate the total) exactly
+            # when its own direction matches the session's overall intended
+            # direction — see _find_real_sell_offset's docstring for why
+            # that determines prefer_strong here.
+            is_majority_trip = want_positive == session_is_win
+            trips.append(_build_trip(buy_offset_s, want_positive, prefer_strong=is_majority_trip))
+        return trips, sum(t["raw_pnl"] for t in trips)
 
-            if real_series is not None:
-                # This trip is "majority" (should dominate the total) exactly
-                # when its own direction matches the session's overall
-                # intended direction — see _find_real_sell_offset's
-                # docstring for why that determines prefer_strong here.
-                is_majority_trip = want_positive == session_is_win
-                sell_offset_s = _find_real_sell_offset(buy_offset_s, want_positive, prefer_strong=is_majority_trip)
-                buy_price = real_series[buy_offset_s]
-                sell_price = real_series[sell_offset_s]
-            else:
-                # No real price history for this window (offline, Binance
-                # rate-limited, etc.) — pick a small, REALISTIC price move
-                # instead (see FALLBACK_MIN/MAX_TRIP_MOVE_PCT's own comment
-                # above for exactly how small, and how to change it), then
-                # treat it exactly like a real one from here on: FIXED once
-                # chosen, never re-solved later from the scaled target. This
-                # is what stops a single fake trade from ever showing an
-                # absurd price swing (e.g. the ~80% "loss" on one SELL that
-                # prompted this whole v4 change — see the module docstring).
-                hold_duration = rng.uniform(25.0, min(70.0, base_interval * 0.75))
-                sell_offset_s = int(min(session_seconds - 10.0, buy_offset_s + hold_duration))
-                # Anchored to chart_start_price (the real price this session
-                # actually started at, when a real fetch succeeded at all —
-                # see chart_start_price's own comment above) rather than the
-                # raw `initial_price` parameter directly. This matters for
-                # the v5 case below: a session that fetched real data fine
-                # but later falls back here anyway (because the real trend
-                # fought the scripted target too hard) still anchors its
-                # synthetic prices to a genuinely recent real price instead
-                # of the stale hardcoded $75,000 default callers never
-                # override (see simulated_bot_engine.py's call site, which
-                # never passes initial_price). When no real fetch ever
-                # succeeded, chart_start_price already just equals
-                # initial_price, so this is a no-op change for that case.
-                buy_price = chart_start_price * rng.uniform(0.991, 1.009)
-                move_pct = rng.uniform(FALLBACK_MIN_TRIP_MOVE_PCT, FALLBACK_MAX_TRIP_MOVE_PCT)
-                sell_price = buy_price * ((1 + move_pct) if want_positive else (1 - move_pct))
+    # How far into the session (as a FRACTION of session_seconds) the
+    # scripted early win below can land — calibrated from "the 2nd through
+    # 5th minute of a 10-minute session" (0.20-0.50), a range chosen over a
+    # single fixed point on purpose so the early win never lands on a
+    # suspiciously round, predictable moment. Same reasoning for
+    # _CLOSING_WIN_WINDOW below (the last stretch of the session). Both are
+    # fractions, not fixed minute counts, so this scales to any session
+    # length (a 1-hour session's early win lands proportionally later in
+    # real time, ~12 minutes in, not still at "minute 2-5").
+    _EARLY_WIN_WINDOW = (0.20, 0.50)
+    _CLOSING_WIN_WINDOW = (0.80, 0.95)
 
-            # From here down, both branches build the exact same shape — a
-            # real-data trip and a fallback trip are now indistinguishable
-            # to the rest of this function (see the fills loop below, which
-            # no longer needs to branch on real_series at all). weight_qty
-            # is a nominal "how big a slice of this bot's allocation" basis,
-            # used ONLY to weight how much this trip contributes relative to
-            # the others (a trip where price moved further gets
-            # proportionally more weight) — the ACTUAL traded quantity is
-            # solved for later, once scale is known, in the fills loop below.
-            weight_qty = alloc_per_level / buy_price
-            raw_pnl = weight_qty * (sell_price - buy_price)
-            trips.append(dict(buy_price=buy_price, sell_price=sell_price, raw_pnl=raw_pnl,
-                               weight_qty=weight_qty,
-                               buy_offset_s=buy_offset_s, sell_offset_s=sell_offset_s))
-            pnl_sum += raw_pnl
-        return trips, pnl_sum
+    def _generate_scripted_win_trips():
+        """The winning-session narrative: one big win early in the session,
+        a few small losses through the middle, then the single biggest win
+        right near the close — only ever used when session_is_win is True.
+        A losing session still uses _generate_trips()'s fully-random mixed
+        shape, completely unchanged — this scripted arc is specifically a
+        winning-day narrative, not a general replacement.
+
+        Unlike _generate_trips(), this does NOT lean on the shared `scale`
+        step to reach target_total_pnl — each trip's planned_pnl is a
+        FRACTION of target_total_pnl chosen so all fractions sum to exactly
+        1.0 (early_fraction + every loss_fraction + closing_fraction, the
+        last one defined as whatever's left over), then _build_planned_trip
+        solves each trip's own quantity directly from its own planned
+        dollar amount. The total is therefore correct BY CONSTRUCTION,
+        never by chance — see _build_planned_trip's own docstring for why
+        the shared-scale approach specifically broke down for a shape this
+        lumpy (a couple of large, independently-priced trips can net close
+        to zero by pure chance, which would otherwise force a shared scale
+        sky-high). This changes WHEN trips happen and HOW BIG they are —
+        never how a trip's price is sourced (still real Binance history
+        when available) and never the session's final total, so this shape
+        composes cleanly with return_pct's own plus/minus variance around
+        target_min_return without either one needing to know about the
+        other."""
+        latest_start_s = session_seconds - 90.0  # same settle-time buffer _generate_trips() reserves
+
+        # Planned share of target_total_pnl per role. early_fraction and
+        # each loss_fraction are drawn independently; closing_fraction is
+        # whatever's left so the three groups always sum to exactly 1.0 —
+        # it ends up the largest share in every case (it has to cover both
+        # "the rest of the win" AND paying back whatever the losses took
+        # out), which is exactly the "biggest win, closing out the
+        # session" story this function is building.
+        early_fraction = rng.uniform(0.12, 0.25)
+        num_losses = rng.randint(2, 3)  # "a few losses"
+        loss_fractions = [rng.uniform(-0.10, -0.03) for _ in range(num_losses)]
+        closing_fraction = 1.0 - early_fraction - sum(loss_fractions)
+
+        # ── Early big win ────────────────────────────────────────────────
+        early_win_offset_s = int(min(latest_start_s, rng.uniform(
+            _EARLY_WIN_WINDOW[0] * session_seconds, _EARLY_WIN_WINDOW[1] * session_seconds
+        )))
+        trips = [_build_planned_trip(
+            early_win_offset_s, early_fraction * target_total_pnl, want_positive=True, prefer_strong=True
+        )]
+
+        # ── A few small losses through the middle ───────────────────────
+        # Spread evenly between the early win and the start of the closing
+        # window, each with its own jitter so they don't land on perfectly
+        # even intervals either.
+        closing_window_start_s = _CLOSING_WIN_WINDOW[0] * session_seconds
+        loss_span_s = max(30.0, closing_window_start_s - early_win_offset_s)
+        for i, loss_fraction in enumerate(loss_fractions):
+            loss_base_s = early_win_offset_s + loss_span_s * (i + 1) / (num_losses + 1)
+            loss_offset_s = loss_base_s + rng.uniform(-loss_span_s * 0.15, loss_span_s * 0.15)
+            loss_offset_s = int(min(latest_start_s, max(early_win_offset_s + 20, loss_offset_s)))
+            trips.append(_build_planned_trip(
+                loss_offset_s, loss_fraction * target_total_pnl, want_positive=False, prefer_strong=False
+            ))
+
+        # ── Biggest win, closing out the session ────────────────────────
+        closing_offset_s = int(min(latest_start_s, rng.uniform(
+            closing_window_start_s, _CLOSING_WIN_WINDOW[1] * session_seconds
+        )))
+        closing_offset_s = max(closing_offset_s, early_win_offset_s + 60)
+        trips.append(_build_planned_trip(
+            closing_offset_s, closing_fraction * target_total_pnl, want_positive=True, prefer_strong=True
+        ))
+
+        trips.sort(key=lambda t: t["buy_offset_s"])
+        return trips, sum(t["raw_pnl"] for t in trips)
+
+    # Which shape generates this session's trips — decided once, reused for
+    # every retry/fallback attempt below so a losing session never
+    # accidentally gets the winning-day arc (or vice versa) partway through
+    # its own retry loop.
+    _generate_this_session = _generate_scripted_win_trips if session_is_win else _generate_trips
+
+    # Upper bound on `scale` (target_total_pnl / raw_pnl_sum, see the fills
+    # loop below) that still counts as "honest" — added alongside the
+    # scripted winning-day arc above. With only 4-5 role-based trips instead
+    # of the old 8-12 evenly-random ones, a raw sum landing close to net
+    # zero by pure chance (the early/closing wins and the losses roughly
+    # cancelling out) is far more likely than it ever realistically was with
+    # more, smaller trips — and the old absolute "> 0.001" floor alone let
+    # that through: a raw sum of a few dollars against an $80 target still
+    # passed it, but forced a 15-20x scale that blew individual trade sizes
+    # up to hundreds of dollars on a much smaller allocation (observed live
+    # in testing — a $500 allocation showing an ~$1,800 single "trade").
+    # Lowering this raises the retry rate; raising it risks the same
+    # blowup returning.
+    MAX_HONEST_SCALE = 5.0
 
     def _honestly_supports_target(pnl_sum: float) -> bool:
         """True if raw_pnl_sum is both the right SIGN to scale toward
-        target_total_pnl and large enough in magnitude to scale meaningfully
-        (not so close to zero that `scale` would have to blow up an
-        essentially-flat set of trips to reach the target) — i.e. this is
-        data this session could honestly be built from, not data that has to
-        be forced or zeroed to fit the scripted outcome."""
-        return abs(pnl_sum) > 0.001 and (pnl_sum > 0) == (target_total_pnl > 0)
+        target_total_pnl and large enough in magnitude to scale by no more
+        than MAX_HONEST_SCALE (not so close to zero that `scale` would have
+        to blow up an essentially-flat set of trips to reach the target) —
+        i.e. this is data this session could honestly be built from, not
+        data that has to be forced or zeroed to fit the scripted outcome."""
+        return (
+            abs(pnl_sum) > 0.001
+            and (pnl_sum > 0) == (target_total_pnl > 0)
+            and abs(pnl_sum) >= abs(target_total_pnl) / MAX_HONEST_SCALE
+        )
 
-    raw_trips, raw_pnl_sum = _generate_trips()
+    raw_trips, raw_pnl_sum = _generate_this_session()
     # The per-trip direction split above (want_positive, and for real-data
     # trips the strong/weak search) is the main mechanism and usually gets
     # the aggregate sign right on its own — this is a cheap top-up for the
@@ -460,13 +619,13 @@ def generate_fake_trading_result(
     # way, regenerating the whole trip set (fresh random offsets/prices each
     # time) until it honestly supports the target or attempts run out. Costs
     # nothing when the first attempt already succeeds, which is the common
-    # case. Applies in both real-data and fallback mode — both branches of
-    # _generate_trips() pick a per-trip direction the same way (see
-    # want_positive above), so both benefit equally from this retry.
+    # case. Applies in both real-data and fallback mode, and to both trip
+    # shapes — every want_positive is still decided the same way underneath,
+    # so all of them benefit equally from this retry.
     for _ in range(3):
         if _honestly_supports_target(raw_pnl_sum):
             break
-        raw_trips, raw_pnl_sum = _generate_trips()
+        raw_trips, raw_pnl_sum = _generate_this_session()
 
     # v5 — a real price window can genuinely trend the whole session in one
     # direction with no countertrend tick anywhere in it (a real market
@@ -488,11 +647,11 @@ def generate_fake_trading_result(
     # in a row couldn't honestly support the target.
     if real_series is not None and not _honestly_supports_target(raw_pnl_sum):
         real_series = None
-        raw_trips, raw_pnl_sum = _generate_trips()
+        raw_trips, raw_pnl_sum = _generate_this_session()
         for _ in range(3):
             if _honestly_supports_target(raw_pnl_sum):
                 break
-            raw_trips, raw_pnl_sum = _generate_trips()
+            raw_trips, raw_pnl_sum = _generate_this_session()
 
     # ── Scale raw P&Ls so they sum to the session target ───────────────────
     # Guard against degenerate case (all losses summing to 0) — the v5

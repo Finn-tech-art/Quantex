@@ -46,25 +46,24 @@ const PAIRS = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
 // this is the field to start actually plumbing through to the backend.
 const GRID_MODES = ["Arithmetic", "Geometric"];
 
-// Preset session lengths, in minutes — replaces what used to be a free-type
-// number input with a fixed list, same reasoning as PAIRS above: a wide-open
-// number field lets a user land on something that quietly behaves worse
-// than they'd expect. Concretely, anything over ~16 minutes (960 seconds)
-// pushes fake_trading_service.py's real-price fetch past Binance's
-// documented 1000-candle-per-call cap on 1-second klines — see
-// binance_market_service.fetch_klines's own comment on that cap. That
-// fetch is written to fail closed (catches the error, returns None) rather
-// than raise, so a long session never breaks a bot creation; it just makes
+// Preset session lengths, in minutes — capped at 1 hour on purpose (the
+// longer options up to 30 days used to exist here, removed per product
+// decision). Concretely, anything over ~16 minutes (960 seconds) pushes
+// fake_trading_service.py's real-price fetch past Binance's documented
+// 1000-candle-per-call cap on 1-second klines — see
+// binance_market_service.fetch_klines's own comment on that cap. That fetch
+// is written to fail closed (catches the error, returns None) rather than
+// raise, so a long session never breaks a bot creation; it just makes
 // _fetch_real_price_series() silently fall back to the fully-synthetic
 // price path instead of drawing the chart from genuine Binance history —
-// see generate_fake_trading_result's own docstring for that fallback. So
-// every option below is safe to offer; the ones past "30 min" simply trade
-// away real-price realism in the chart for a longer-running bot. Each
+// see generate_fake_trading_result's own docstring for that fallback. Each
 // array entry's value is the raw minutes number sent to createBot();
 // SESSION_LENGTHS's translated display text lives in i18n.js under
 // bots.create.sessionLengthOption<minutes> — add both together if a new
-// preset is ever added here.
-const SESSION_LENGTHS = [5, 10, 30, 60, 1440, 4320, 10080, 20160, 43200];
+// preset is ever added here. The backend enforces this same 60-minute
+// ceiling too, in simulated_bot_service.MAX_SESSION_LENGTH_MINUTES — keep
+// both in sync.
+const SESSION_LENGTHS = [5, 10, 30, 60];
 
 // Mirrors backend/app/services/session_limit_service.py's
 // DEFAULT_DAILY_SESSION_LIMIT and FREE_TIER_MAX_SESSION_LENGTH_MINUTES —

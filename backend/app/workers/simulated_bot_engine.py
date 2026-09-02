@@ -79,8 +79,9 @@ def _publish_thinking(bot_id: str, reasoning_text: str) -> None:
 # raise/lower this single number to make narration sparser/chattier. Kept
 # stateless (no "last spoke at" persisted anywhere) by firing on whichever
 # sweep tick's elapsed_seconds falls in the FIRST _sweep-interval-sized_
-# slice of each interval window below — see _should_think_this_tick.
-_THINKING_INTERVAL_SECONDS = 30
+# slice of each interval window below — see _should_think_this_tick. Lowered
+# from 30 to 15 so the bot narrates roughly twice as often per session.
+_THINKING_INTERVAL_SECONDS = 15
 
 # Must be >= the real simulated-bot-engine-sweep schedule (10s — see
 # celery_app.py's beat_schedule) so exactly one tick per
@@ -97,25 +98,44 @@ def _should_think_this_tick(elapsed_seconds: float) -> bool:
 # repeating the exact same sentence every _THINKING_INTERVAL_SECONDS — which
 # template plays is picked deterministically from elapsed time (not random),
 # so it varies tick-to-tick without needing its own persisted state either.
-# Add more entries here for more variety; each is called with pair,
-# remaining (fills left this session), minutes_left (float).
+# Expanded to a larger, more explanatory set of lines (product decision:
+# "the bot should think more") so a longer session doesn't cycle through
+# the same handful of short lines over and over. Add more entries here for
+# even more variety; each is called with pair, remaining (fills left this
+# session), plural, minutes_left, elapsed_minutes, and pct_complete.
 _THINKING_TEMPLATES = [
-    "Still watching {pair} — {remaining} fill{plural} left to play out over the next {minutes_left:.0f} min.",
+    "Still watching {pair}, {remaining} fill{plural} left to play out over the next {minutes_left:.0f} min.",
     "No new signal on {pair} yet. Holding position while the next few minutes unfold.",
     "{minutes_left:.0f} minutes left in this session, {remaining} fill{plural} still scheduled.",
-    "Nothing has crossed the next threshold on {pair} yet — staying put for now.",
+    "Nothing has crossed the next threshold on {pair} yet. Staying put for now.",
+    "Checking order book depth on {pair} before committing to the next move.",
+    "Price is inside the current grid band on {pair}, waiting for it to reach the next level.",
+    "About {pct_complete:.0f}% through this session. {remaining} fill{plural} still to come.",
+    "Comparing the last few ticks on {pair} against the grid spacing before acting.",
+    "Volatility looks manageable on {pair} right now, no reason to adjust the plan yet.",
+    "{elapsed_minutes:.0f} minutes in. Sticking to the scripted grid levels for {pair}.",
+    "Momentum on {pair} hasn't cleared the next threshold, so this level stays untouched.",
+    "Re-checking the spread on {pair} before the next scheduled fill.",
+    "Session is {pct_complete:.0f}% complete. {remaining} fill{plural} remaining on {pair}.",
+    "Watching for a pullback on {pair} before the next entry triggers.",
+    "No action needed on {pair} this tick, conditions haven't changed enough yet.",
 ]
 
 
 def _generate_thinking_text(bot: dict, pending: dict, elapsed_seconds: float) -> str:
     remaining = len(pending["fills"]) - pending["fills_revealed_count"]
-    minutes_left = max(0.0, (pending["session_length_minutes"] * 60 - elapsed_seconds) / 60)
+    session_length_seconds = pending["session_length_minutes"] * 60
+    minutes_left = max(0.0, (session_length_seconds - elapsed_seconds) / 60)
+    elapsed_minutes = elapsed_seconds / 60
+    pct_complete = min(100.0, max(0.0, (elapsed_seconds / session_length_seconds) * 100)) if session_length_seconds else 0.0
     template_index = int(elapsed_seconds // _THINKING_INTERVAL_SECONDS) % len(_THINKING_TEMPLATES)
     return _THINKING_TEMPLATES[template_index].format(
         pair=bot["pair"],
         remaining=remaining,
         plural="" if remaining == 1 else "s",
         minutes_left=minutes_left,
+        elapsed_minutes=elapsed_minutes,
+        pct_complete=pct_complete,
     )
 
 

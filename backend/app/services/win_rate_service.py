@@ -17,12 +17,12 @@ from decimal import Decimal
 
 from app.services.supabase_client import get_supabase
 
-# Used only when no admin has ever set a rate for the requested date — keeps
-# the demo/bot experience working exactly as it did before module 2 existed,
-# rather than erroring or defaulting to something surprising like 0% or 100%.
-# Change these two numbers to change the out-of-the-box behavior for any date
-# an admin hasn't explicitly configured yet.
-DEFAULT_WIN_RATE = 0.90
+# Used only when no admin has ever set a rate for the requested date — this
+# is the out-of-the-box behavior for any date an admin hasn't explicitly
+# configured yet. DEFAULT_WIN_RATE = 1.0 means every session wins by
+# default (no losing sessions at all) until an admin sets a lower rate for
+# a given date. Change these two numbers to change that default.
+DEFAULT_WIN_RATE = 1.0
 DEFAULT_TARGET_MIN_RETURN = 0.40
 
 

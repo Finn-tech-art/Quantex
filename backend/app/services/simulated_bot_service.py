@@ -89,6 +89,14 @@ DEFAULT_INTERVAL_SECONDS = 15 * 60  # one scripted session every 15 minutes
 # short sessions ever produce a $0.00 result again.
 MIN_SESSION_LENGTH_MINUTES = 5
 
+# Ceiling on session_length_minutes, matching CreateBotPage.jsx's
+# SESSION_LENGTHS array (5, 10, 30, 60 only, per the product decision to
+# drop the longer day/week/month options that used to be offered) — keep
+# both this number and that array in sync. Enforced here too, not just in
+# the dropdown, so a stale or hand-crafted request can never create a bot
+# with a session length the UI no longer offers.
+MAX_SESSION_LENGTH_MINUTES = 60
+
 # A simulated bot runs exactly one session and then stops (status flips to
 # SESSION_CAPPED, an existing bot_statuses row that already meant exactly
 # this). This is deliberate, not a placeholder to raise later: the "3
@@ -160,6 +168,8 @@ def create_simulated_bot(
         raise ValueError(f"interval_seconds must be >= {MIN_INTERVAL_SECONDS}")
     if session_length_minutes < MIN_SESSION_LENGTH_MINUTES:
         raise ValueError(f"session_length_minutes must be >= {MIN_SESSION_LENGTH_MINUTES}")
+    if session_length_minutes > MAX_SESSION_LENGTH_MINUTES:
+        raise ValueError(f"session_length_minutes must be <= {MAX_SESSION_LENGTH_MINUTES}")
 
     # Free-tier length cap — see session_limit_service's module comment for
     # why this and the daily-configuration-count cap right below it are both

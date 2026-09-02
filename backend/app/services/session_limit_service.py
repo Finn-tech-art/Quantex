@@ -18,7 +18,8 @@
 # rules for that user at once — there is deliberately no separate flag for
 # exempting just one of the two.
 
-from datetime import date, datetime, timezone
+import math
+from datetime import date, datetime, timedelta, timezone
 
 from app.services.supabase_client import get_supabase
 
@@ -40,6 +41,27 @@ FREE_TIER_MAX_SESSION_LENGTH_MINUTES = 30
 
 def today_utc() -> date:
     return datetime.now(tz=timezone.utc).date()
+
+
+def hours_until_reset() -> int:
+    """How many hours are left until the daily session cap actually resets,
+    right now, in real time — used to turn the generic "try again tomorrow"
+    a rate-limited user sees into something concrete like "resets in 2
+    hours". The cap resets by nothing more than the calendar rolling over to
+    a new UTC date (sessions_started_today() keys off today_utc(), so a new
+    date simply has no row yet, i.e. a count of 0) — there's no separate
+    "reset job" to query, so this just computes the gap to next UTC
+    midnight directly.
+
+    Rounded UP (math.ceil), never down: 15 minutes left should read as
+    "resets in 1 hour", not "resets in 0 hours" — the latter reads as
+    already-reset, which would be actively misleading. The floor of 1 means
+    this never shows "0 hours" even in the last few seconds before
+    midnight."""
+    now = datetime.now(tz=timezone.utc)
+    next_reset = datetime.combine(today_utc() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+    seconds_left = (next_reset - now).total_seconds()
+    return max(1, math.ceil(seconds_left / 3600))
 
 
 def is_free_tier(daily_session_limit: int) -> bool:

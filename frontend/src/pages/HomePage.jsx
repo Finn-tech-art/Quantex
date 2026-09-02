@@ -370,6 +370,12 @@ function RangeTabs({ selected, onSelect }) {
 function Sparkline({ points, height = 56, color }) {
   const width = 300;
   const glowId = useId();
+  // Separate id for the area fill's fade gradient (useId again, same as
+  // glowId above) — SVG def ids must be unique per <svg> on the page, and
+  // HomePage can render more than one Sparkline (e.g. currency switches
+  // remounting it), so each instance needs its own id rather than a
+  // hardcoded string.
+  const fadeId = useId();
   const closes = points.map((p) => Number(p.close));
   const min = Math.min(...closes);
   const max = Math.max(...closes);
@@ -390,8 +396,27 @@ function Sparkline({ points, height = 56, color }) {
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
+        {/*
+          Vertical fade for the area fill, top (near the line) to bottom
+          (the chart's floor). y1/y2 go 0 -> 1 in the default objectBoundingBox
+          units, i.e. top of the SVG to bottom, regardless of the actual
+          height prop. Three stops rather than two so the fade eases out
+          gradually instead of reading as a single straight ramp: it opens
+          at 0.32 opacity right under the line, is already down to 0.14 by
+          the halfway point, and tapers the rest of the way to fully
+          transparent (0) at the bottom — that trailing-off curve is what
+          replaces the old hard-edged flat-opacity fill. To make the fade
+          start stronger or weaker, raise/lower the first stop's opacity;
+          to make it fade out faster or slower, move the middle stop's
+          offset earlier or later.
+        */}
+        <linearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.32" />
+          <stop offset="45%" stopColor={color} stopOpacity="0.14" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
       </defs>
-      <path d={areaPath} fill={color} fillOpacity="0.16" stroke="none" />
+      <path d={areaPath} fill={`url(#${fadeId})`} stroke="none" />
       <path
         d={linePath}
         fill="none"

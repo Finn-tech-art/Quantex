@@ -182,9 +182,14 @@ def create_simulated_bot(
     # the previous bot capped. So this is the one and only place that needs
     # to gate the count; the engine doesn't need its own check.
     if not session_limit_service.has_session_budget_today(user_id, daily_session_limit):
+        # hours_until_reset() gives the actual real-time gap to the next UTC
+        # midnight, not a generic "tomorrow" — a user hitting this at 23:50
+        # UTC sees "resets in 1 hour", one hitting it at 00:05 UTC sees
+        # "resets in 24 hours", both accurate at the moment they're shown.
+        hours_left = session_limit_service.hours_until_reset()
         raise ValueError(
-            f"You've already configured {daily_session_limit} bot session(s) today — "
-            "try again tomorrow, or ask an admin to raise your daily limit"
+            f"You've already configured {daily_session_limit} bot session(s) today. "
+            f"Resets in {hours_left} hour{'s' if hours_left != 1 else ''} (midnight UTC)."
         )
 
     config = build_initial_simulated_config(session_length_minutes)

@@ -255,25 +255,37 @@ function HeroCard({ displayValue, totalUsd, currency, onCurrencyChange, history,
         <AnimatedPsi mode="working" size={26} color="var(--on-accent)" />
       ) : (
         <>
-          <BalanceFigure key={currency} value={displayValue} currency={currency} hidden={balanceHidden} />
+          {/* Grouped in its own tight-gap column, separate from the
+              card's own outer gap (var(--space-6) between this group,
+              the sparkline, the delta line, and RangeTabs below) — the
+              balance figure and its "≈ X USDT" caption read as one unit,
+              sitting close together, rather than getting the same
+              breathing room as the card's other, unrelated rows. Lower
+              this gap further to pull them closer still. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+            <BalanceFigure key={currency} value={displayValue} currency={currency} hidden={balanceHidden} />
 
-          {/* Bybit-style "≈ X USDT" caption — always the USD/USDT total
-              (see totalUsdValue() in lib/currency.js, and lib/currency.js's
-              STABLECOIN_ASSETS treating USDT 1:1 with USD), regardless of
-              which currency the picker above is set to. `totalUsd` can
-              still be null for a tick after balances resolve if it's
-              waiting on one more asset's live price, so this is gated
-              separately from the main `loading` check above rather than
-              assumed to be ready whenever displayValue is. */}
-          {totalUsd != null && (
-            <span style={{ fontFamily: "var(--font-data)", fontSize: "11px", color: "var(--teal-sage)" }}>
-              {balanceHidden
-                ? "••••••"
-                : t("home.hero.equivalent", {
-                    amount: totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                  })}
-            </span>
-          )}
+            {/* Bybit-style "≈ X USDT" caption — always the live USD/USDT
+                total (see totalUsdValue() in lib/currency.js, and that
+                file's STABLECOIN_ASSETS treating USDT 1:1 with USD),
+                regardless of which currency the picker above is set to.
+                Ticks on its own every time useAssetPrices' poll lands a
+                fresh price map (see that hook's own comment), the same
+                way the main figure above it does. `totalUsd` can still be
+                null for a tick after balances resolve if it's waiting on
+                one more asset's price, so this is gated separately from
+                the main `loading` check above rather than assumed ready
+                whenever displayValue is. */}
+            {totalUsd != null && (
+              <span style={{ fontFamily: "var(--font-data)", fontSize: "11px", color: "var(--teal-sage)" }}>
+                {balanceHidden
+                  ? "••••••"
+                  : t("home.hero.equivalent", {
+                      amount: totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    })}
+              </span>
+            )}
+          </div>
 
           {history.length > 1 && <Sparkline points={history} color={isUp ? "var(--gain-on-dark)" : "var(--loss)"} />}
 

@@ -156,21 +156,30 @@ function HeroCard({ displayValue, totalUsd, currency, onCurrencyChange, loading,
       {loading ? (
         <AnimatedPsi mode="working" size={26} color="var(--on-accent)" />
       ) : (
-        <>
+        // Grouped in its own tight-gap column, separate from the card's
+        // own outer gap (var(--space-8) between this group and the
+        // Deposit/Withdraw/History row below) — the balance figure and
+        // its "≈ X USDT" caption read as one unit, sitting close
+        // together, rather than getting the same breathing room as the
+        // card's other, unrelated rows. Lower this gap further to pull
+        // them closer still.
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
           <span style={{ fontFamily: "var(--font-data)", fontWeight: 600, fontSize: "28px", color: "var(--on-accent)" }}>
             {currency === "USD"
               ? `$${displayValue.toFixed(decimals)}`
               : `${displayValue.toFixed(decimals)} ${currency}`}
           </span>
 
-          {/* Bybit-style "≈ X USDT" caption — always the USD/USDT total
-              (see totalUsdValue() in lib/currency.js, and that file's
-              STABLECOIN_ASSETS treating USDT 1:1 with USD), regardless of
-              which currency the picker above is set to. `totalUsd` can
-              still be null for a tick after balances resolve if it's
-              waiting on one more asset's live price, so this is gated
-              separately from `loading` rather than assumed ready whenever
-              displayValue is. */}
+          {/* Bybit-style "≈ X USDT" caption — always the live USD/USDT
+              total (see totalUsdValue() in lib/currency.js, and that
+              file's STABLECOIN_ASSETS treating USDT 1:1 with USD),
+              regardless of which currency the picker above is set to.
+              Ticks on its own every time useAssetPrices' poll lands a
+              fresh price map (see that hook's own comment). `totalUsd`
+              can still be null for a tick after balances resolve if it's
+              waiting on one more asset's price, so this is gated
+              separately from `loading` rather than assumed ready
+              whenever displayValue is. */}
           {totalUsd != null && (
             <span style={{ fontFamily: "var(--font-data)", fontSize: "11px", color: "var(--teal-sage)" }}>
               {t("wallet.equivalent", {
@@ -178,7 +187,7 @@ function HeroCard({ displayValue, totalUsd, currency, onCurrencyChange, loading,
               })}
             </span>
           )}
-        </>
+        </div>
       )}
 
       <div style={{ display: "flex", gap: "var(--space-4)" }}>

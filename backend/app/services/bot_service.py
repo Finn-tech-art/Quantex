@@ -187,8 +187,23 @@ def list_bots_for_user(user_id: str) -> list[dict]:
     """Every bot (any status) belonging to one user — this is what the
     bots-list screen in the frontend reads. Different from
     list_active_bots() above, which is status-filtered and user-agnostic
-    (it's for the engine, not for a person looking at their own bots)."""
-    return get_supabase().table("bots").select("*").eq("user_id", user_id).execute().data
+    (it's for the engine, not for a person looking at their own bots).
+
+    Ordered newest-first (desc=True) — without an explicit order Postgres/
+    PostgREST makes no guarantee about row order at all, which happened to
+    read as roughly insertion order in practice but wasn't actually
+    reliable. BotsPage.jsx relies on this ordering rather than re-sorting
+    client-side, so the freshest bot a user just created always lands at
+    the top of their list."""
+    return (
+        get_supabase()
+        .table("bots")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+    )
 
 
 # Reverse lookup for bot_status_id -> code, same idea as strategy_type_code()

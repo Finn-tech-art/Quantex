@@ -7,7 +7,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.models.market import MarketsResponse, MarketTicker
+from app.models.market import MarketsResponse, MarketTicker, RealPricesResponse
 from app.services import binance_market_service
 from app.utils.auth import get_current_user
 
@@ -31,3 +31,14 @@ async def get_tickers(user: dict = Depends(get_current_user)):
     # (e.g. change_percent, for a "biggest movers" ordering instead).
     ordered = sorted(tickers, key=lambda t: float(t["quote_volume"]), reverse=True)
     return MarketsResponse(tickers=[MarketTicker(**t) for t in ordered])
+
+
+@router.get("/real-prices", response_model=RealPricesResponse)
+async def get_real_prices(user: dict = Depends(get_current_user)):
+    # Deliberately never 503s the way /tickers above does — an empty
+    # {} is a perfectly valid (if momentarily unhelpful) answer here rather
+    # than an error, since the caller (useRealAssetPrices.js) already treats
+    # "my asset isn't in this map yet" as "not ready", the same way it
+    # treats a totally empty map. See get_all_real_prices()'s own docstring
+    # for exactly what this is and why it's kept separate from /tickers.
+    return RealPricesResponse(prices=await binance_market_service.get_all_real_prices())

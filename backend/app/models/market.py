@@ -21,3 +21,15 @@ class MarketTicker(BaseModel):
 
 class MarketsResponse(BaseModel):
     tickers: list[MarketTicker]
+
+
+# Response shape for GET /market/real-prices — see
+# binance_market_service.get_all_real_prices()'s own docstring for why this
+# is a separate endpoint from /market/tickers above rather than reusing it:
+# /market/tickers is deliberately jittered for a "feels alive" Markets page,
+# while this one is always the true last-seen Binance price, straight off
+# the never-jittered price:{SYMBOL} keys. Keyed by base asset (e.g. "BTC"),
+# not full symbol, since every caller of this only ever wants "what's BTC
+# worth right now", not the USDT-quoted pair name.
+class RealPricesResponse(BaseModel):
+    prices: dict[str, str]

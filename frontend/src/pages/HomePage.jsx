@@ -39,6 +39,7 @@ import NotificationBell from "../components/NotificationBell";
 import ProfileDetailsSheet from "../components/ProfileDetailsSheet";
 import VerifyEmailPrompt from "../components/VerifyEmailPrompt";
 import useAssetPrices from "../hooks/useAssetPrices";
+import useRealAssetPrices from "../hooks/useRealAssetPrices";
 import useCountUp from "../hooks/useCountUp";
 import useFlashOnChange, { FLASH_FADE_MS } from "../hooks/useFlashOnChange";
 import useDisplayCurrency from "../hooks/useDisplayCurrency";
@@ -60,11 +61,19 @@ export default function HomePage() {
   const [balances, setBalances] = useState(null); // null = still loading
   const [history, setHistory] = useState(null); // null = still loading, [] = loaded but empty
   const [bots, setBots] = useState(null);
-  // Live USD price per asset (from the same feed MarketsPage uses) — see
-  // useAssetPrices.js. Needed to turn `balances` into a real dollar total,
-  // and to convert that total into a coin-equivalent when `currency` below
-  // isn't "USD".
+  // Jittered USD price per asset (from the same feed MarketsPage uses) —
+  // see useAssetPrices.js. Used ONLY for the small "≈ X USDT" caption's
+  // cosmetic wobble below and for converting the balance into a
+  // coin-equivalent when `currency` isn't "USD" (a coin-denominated total
+  // is expected to move as that coin's price moves) — never for the main
+  // dollar total itself, see realPrices below.
   const prices = useAssetPrices(accessToken);
+  // The REAL, never-jittered counterpart — this is what the actual balance
+  // figure is computed from (totalUsd below), so it never wobbles with
+  // fake movement, only with genuine price changes between real 5-minute
+  // Binance fetches. See useRealAssetPrices.js for why this has to be a
+  // separate source from `prices` above rather than the same feed.
+  const realPrices = useRealAssetPrices(accessToken);
   // Which currency the balance below is shown in ("USD", "BTC", "ETH", or
   // "SOL") — a single preference shared with WalletPage's identical picker
   // (see useDisplayCurrency.js for why this lives in localStorage rather
@@ -118,15 +127,25 @@ export default function HomePage() {
 
   if (!user) return null;
 
-  // null until balances have loaded AND every held asset has a live price
-  // (see totalUsdValue()'s own doc comment) — never a partial/undercounted
-  // number.
+  // The REAL total (never jittered) — null until balances have loaded AND
+  // every held asset is priced (see totalUsdValue()'s own doc comment) —
+  // never a partial/undercounted number. This is what the hero card's big
+  // figure is built from (via displayValue below): "the balance itself"
+  // isn't meant to move with fake noise, only the small equivalency
+  // caption is.
+  const totalUsdReal = balances ? totalUsdValue(balances, realPrices) : null;
+  // The (deliberately jittered) total shown ONLY in the small "≈ X USDT"
+  // caption underneath the big figure — see HeroCard below.
   const totalUsd = balances ? totalUsdValue(balances, prices) : null;
-  // The figure actually shown — totalUsd itself when currency is "USD",
-  // or that same total divided by the chosen coin's live price otherwise.
-  // Still null (not a wrong number) if the target currency's own price
-  // isn't loaded yet.
-  const displayValue = convertUsdTo(totalUsd, currency, prices);
+  // The figure actually shown — totalUsdReal itself when currency is
+  // "USD" (stable, accurate), or that REAL total divided by the chosen
+  // coin's JITTERED live price otherwise: a coin-denominated total is
+  // naturally expected to move as that coin's price moves, so letting it
+  // ride the jittered price here is what gives it that "still alive"
+  // wobble without touching the dollar total it's derived from. Still
+  // null (not a wrong number) if the target currency's own price isn't
+  // loaded yet.
+  const displayValue = convertUsdTo(totalUsdReal, currency, prices);
 
   const activeBots = (bots || []).filter((b) => b.status === "ACTIVE");
 

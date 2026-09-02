@@ -149,6 +149,14 @@ def fetch_klines(symbol: str, interval: str, limit: int) -> list[list] | None:
         return None
 
 
+# Shared prefix for every symbol's real-price key (e.g. "price:BTCUSDT") —
+# pulled out as its own constant (rather than just inlined in _price_key()
+# below) so get_all_real_prices() can also use it to pattern-match every
+# such key in one Redis KEYS call, without hardcoding the "price:" string a
+# second time somewhere else.
+_PRICE_KEY_PREFIX = "price:"
+
+
 def _price_key(symbol: str) -> str:
     """Builds the Redis key a symbol's latest price is stored under, e.g.
     "price:BTCUSDT". Centralized here (instead of repeating the f-string
@@ -157,7 +165,7 @@ def _price_key(symbol: str) -> str:
     # .upper() so "btcusdt", "BTCUSDT", and "BtcUsdt" all hit the same key —
     # the key format itself is otherwise an arbitrary choice, change it here
     # (and nowhere else) if you ever want a different naming scheme.
-    return f"price:{symbol.upper()}"
+    return f"{_PRICE_KEY_PREFIX}{symbol.upper()}"
 
 
 async def get_latest_price(symbol: str) -> str | None:
@@ -181,6 +189,51 @@ def get_latest_price_sync(symbol: str) -> str | None:
     separate sync Redis client is needed at all rather than reusing the
     async one everywhere."""
     return get_redis_sync().get(_price_key(symbol))
+
+
+async def get_all_real_prices() -> dict[str, str]:
+    """Returns every symbol currently being live-streamed by stream_price()
+    (the always-on BTCUSDT/ETHUSDT/SOLUSDT plus whatever extra symbols
+    manage_bot_symbol_streams() has started for an active bot) as a
+    {BASE_ASSET: price} map, e.g. {"BTC": "68000.12000000"} — keyed by base
+    asset to match useAssetPrices.js's existing {BTC: ..., ETH: ...} shape
+    on the frontend.
+
+    This is the REAL counterpart to get_all_tickers()/_ALL_TICKERS_KEY:
+    that cache is deliberately jittered every MARKET_JITTER_INTERVAL_SECONDS
+    (see jitter_all_tickers() above) so the Markets page feels alive between
+    real 5-minute fetches — fine for a browsing list, but wrong for a real
+    balance figure. This function instead reads straight from the
+    price:{SYMBOL} keys stream_price() writes, which jitter_all_tickers()
+    never touches, so it's always the true last-seen Binance price. The
+    Wallet/Home balance total's main figure should be computed from THIS,
+    not from get_all_tickers() — only the small "≈ X USDT" equivalency
+    caption underneath it is meant to visibly wobble with fake movement.
+
+    Uses Redis KEYS (not SCAN) to find every "price:*" key at once — normally
+    KEYS is avoided on a large keyspace since it blocks the whole server
+    while it scans everything, but this app only ever has a handful of
+    tracked symbols (3 always-on plus however many bots are active) at once,
+    so the cost here is negligible."""
+    r = get_redis()
+    keys = await r.keys(f"{_PRICE_KEY_PREFIX}*")
+    if not keys:
+        return {}
+
+    prices = await r.mget(keys)
+    result: dict[str, str] = {}
+    for key, price in zip(keys, prices):
+        if price is None:
+            continue
+        symbol = key[len(_PRICE_KEY_PREFIX):]  # "price:BTCUSDT" -> "BTCUSDT"
+        # Same "strip the quote asset off the end" convention
+        # poll_all_tickers() uses for the Markets-page cache — every symbol
+        # tracked here is always USDT-quoted (see ALWAYS_STREAMED_SYMBOLS
+        # and trading_service.py's SUPPORTED_PAIRS), so this is safe without
+        # re-deriving MARKET_QUOTE_ASSET's stripping logic more generally.
+        base_asset = symbol[: -len(MARKET_QUOTE_ASSET)] if symbol.endswith(MARKET_QUOTE_ASSET) else symbol
+        result[base_asset] = price
+    return result
 
 
 async def stream_price(symbol: str) -> None:

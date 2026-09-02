@@ -256,6 +256,21 @@ export function getMarkets(accessToken) {
   });
 }
 
+// The REAL (never-jittered) counterpart to getMarkets() above — see
+// backend/app/routers/market.py's /real-prices route and
+// binance_market_service.get_all_real_prices()'s docstring for why this is
+// a separate endpoint: getMarkets()'s cache is deliberately jittered every
+// few seconds so the Markets page feels alive, which is wrong for anything
+// that needs to be an accurate figure, like the Wallet/Home balance total.
+// Returns { prices: { BTC: "68000.12", ... } } — see useRealAssetPrices.js
+// for how this gets turned into the { BTC: 68000.12, ... } number map the
+// rest of the app expects.
+export function getRealPrices(accessToken) {
+  return request("/market/real-prices", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
 // ── Manual Trade screen — see backend/app/services/trading_service.py for
 // the fee model and why this is "simulated execution, real ledger effect"
 // rather than either a fully-fake demo or a real Binance order. quoteAmount

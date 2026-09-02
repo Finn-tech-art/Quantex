@@ -118,33 +118,31 @@ FALLBACK_MAX_TRIP_MOVE_PCT = 0.006   # 0.6%
 
 # The session length (in minutes) at which a session's scripted return_pct
 # hits its FULL, un-throttled size — see _duration_scale()'s docstring for
-# the mechanics. Below this, both a winning session's gain and a losing
-# session's loss are scaled down proportionally, so a 5-minute session can
-# never swing as hard (up or down) as a 10-minute one. Sessions at or above
-# this length always get the full scale (1.0) — there's no bonus for running
-# even longer than this. Originally 30 — lowered to 10 per product decision
-# (a 10-minute session should be able to look just as "insane" as a 30 or
-# 60-minute one, not capped at a third of their range). Session lengths of
-# 30/60 minutes are unaffected either way, since they already sat at or past
-# whatever this number is. To change WHERE the "balances out" point sits,
-# change only this one number; _duration_scale() and its call site don't
-# need to change.
-SESSION_LENGTH_FULL_SCALE_MINUTES = 10
+# the mechanics. Went 30 -> 10 -> 5 across two product decisions: first so a
+# 10-minute session couldn't be capped at a third of a 30-minute one's
+# range, then so a 5-minute session (the shortest option CreateBotPage.jsx
+# offers) could look just as "insane" as every other length too. At 5,
+# _duration_scale() is effectively a no-op for every session length this
+# app currently offers (5/10/30/60 minutes all resolve to the full 1.0) —
+# the mechanism is left in place rather than removed, in case a shorter
+# preset is ever added and the "shorter should swing less" idea is wanted
+# again; raise this back up to bring that behavior back for whichever
+# lengths should stay throttled.
+SESSION_LENGTH_FULL_SCALE_MINUTES = 5
 
 
 def _duration_scale(session_length_minutes: int) -> float:
     """Returns a 0.0-1.0 multiplier applied to a session's scripted
     return_pct, proportional to how far session_length_minutes is into the
-    SESSION_LENGTH_FULL_SCALE_MINUTES ramp — e.g. a 5-minute session (with
-    the default 10-minute full-scale point) gets 5/10 = 0.5, so its
-    eventual win or loss is half the size a 10-minute (or longer) session's
-    would be for the exact same underlying win_rate/target_min_return roll.
-    Session lengths at or above the full-scale point are clamped to exactly
-    1.0 (no reward for running longer than that). This intentionally scales
-    BOTH win and loss magnitude the same way — a short losing session loses
-    less too, not just a short winning session winning less — so the
-    scaling reads as "less time in the market, smaller moves either
-    direction," not as a thumb on the scale toward wins."""
+    SESSION_LENGTH_FULL_SCALE_MINUTES ramp. Session lengths at or above the
+    full-scale point are clamped to exactly 1.0 (no reward for running
+    longer than that) — see this constant's own comment for why every
+    session length this app currently offers lands in that clamped case.
+    This intentionally scales BOTH win and loss magnitude the same way — a
+    short losing session loses less too, not just a short winning session
+    winning less — so the scaling reads as "less time in the market,
+    smaller moves either direction," not as a thumb on the scale toward
+    wins."""
     return min(session_length_minutes / SESSION_LENGTH_FULL_SCALE_MINUTES, 1.0)
 
 _THINKING_REASONS = [
@@ -497,15 +495,19 @@ def generate_fake_trading_result(
         return trips, sum(t["raw_pnl"] for t in trips)
 
     # How far into the session (as a FRACTION of session_seconds) the
-    # scripted early win below can land — calibrated from "the 2nd through
-    # 5th minute of a 10-minute session" (0.20-0.50), a range chosen over a
-    # single fixed point on purpose so the early win never lands on a
-    # suspiciously round, predictable moment. Same reasoning for
-    # _CLOSING_WIN_WINDOW below (the last stretch of the session). Both are
+    # scripted early win below can land. Originally 0.20-0.50 (the "2nd
+    # through 5th minute of a 10-minute session"), moved much earlier per
+    # product decision — that window left the fill feed looking empty for
+    # several minutes at the start of every session, which read as the bot
+    # being slow/broken rather than "thinking." Now the first fill lands
+    # within roughly the first 3%-15% of the session instead. Still a
+    # range, not a single fixed point, so it never lands on a suspiciously
+    # round, predictable moment. Same reasoning for _CLOSING_WIN_WINDOW
+    # below (the last stretch of the session, unchanged). Both are
     # fractions, not fixed minute counts, so this scales to any session
     # length (a 1-hour session's early win lands proportionally later in
-    # real time, ~12 minutes in, not still at "minute 2-5").
-    _EARLY_WIN_WINDOW = (0.20, 0.50)
+    # real time than a 5-minute one's, not at the exact same offset).
+    _EARLY_WIN_WINDOW = (0.03, 0.15)
     _CLOSING_WIN_WINDOW = (0.80, 0.95)
 
     def _generate_scripted_win_trips():

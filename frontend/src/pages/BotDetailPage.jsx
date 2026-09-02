@@ -180,14 +180,20 @@ export default function BotDetailPage() {
   // the "feed right below the chart" layout) and the standalone Feed tab
   // below — same fills, same timeLabel derivation, just two different
   // places on the page that want to show them. liveThoughts (see the
-  // WebSocket effect above) are prepended ahead of the real fills — they
-  // only ever get pushed on a tick where nothing new was revealed, so
-  // chronologically they always belong ahead of whatever's already in
-  // `fills`, newest-first same as the rest of this list.
+  // WebSocket effect above) are merged in by actual timestamp, newest
+  // first, rather than unconditionally placed ahead of every fill — this
+  // used to just prepend the whole liveThoughts array in front of `fills`,
+  // which briefly worked back when a thinking message was cleared on
+  // almost every tick (so it really was always the newest thing on
+  // screen), but broke once thinking messages started persisting for the
+  // whole session: an old thinking line would still render above a fill
+  // that happened well after it. Sorting the combined list by created_at
+  // means a real fill always lands above whatever thinking preceded it,
+  // and a fresh thinking line still lands above an older fill.
   const feedFills = [
     ...liveThoughts.map((th) => ({ ...th, timeLabel: new Date(th.created_at).toLocaleTimeString() })),
     ...fills.map((f) => ({ ...f, timeLabel: new Date(f.created_at).toLocaleTimeString() })),
-  ];
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   return (
     <>

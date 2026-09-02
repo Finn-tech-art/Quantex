@@ -138,14 +138,16 @@ export default function HomePage() {
   // caption underneath the big figure — see HeroCard below.
   const totalUsd = balances ? totalUsdValue(balances, prices) : null;
   // The figure actually shown — totalUsdReal itself when currency is
-  // "USD" (stable, accurate), or that REAL total divided by the chosen
-  // coin's JITTERED live price otherwise: a coin-denominated total is
-  // naturally expected to move as that coin's price moves, so letting it
-  // ride the jittered price here is what gives it that "still alive"
-  // wobble without touching the dollar total it's derived from. Still
-  // null (not a wrong number) if the target currency's own price isn't
-  // loaded yet.
-  const displayValue = convertUsdTo(totalUsdReal, currency, prices);
+  // "USD", or that REAL total divided by the chosen coin's REAL price
+  // otherwise. Deliberately `realPrices` here, NOT the jittered `prices`
+  // — this used to divide by the jittered feed for non-USD currencies,
+  // which meant the main figure still visibly wobbled with fake "cut
+  // Redis costs" jitter even though its numerator (totalUsdReal) never
+  // did. Now the big figure is fully immune to jitter_all_tickers() in
+  // every currency mode; only the small "≈ X USDT" caption below still
+  // reads the jittered feed. Still null (not a wrong number) if the
+  // target currency's own real price isn't loaded yet.
+  const displayValue = convertUsdTo(totalUsdReal, currency, realPrices);
 
   const activeBots = (bots || []).filter((b) => b.status === "ACTIVE");
 

@@ -56,13 +56,15 @@ export default function WalletPage() {
   // caption underneath the big figure — see HeroCard below.
   const totalUsd = balances ? totalUsdValue(balances, prices) : null;
   // The figure HeroCard's big number actually shows — totalUsdReal itself
-  // for "USD" (stable, accurate), or that REAL total divided by the chosen
-  // coin's JITTERED live price otherwise: a coin-denominated total is
-  // naturally expected to move as that coin's price moves, so letting it
-  // ride the jittered price here is what gives it that "still alive"
-  // wobble, without touching the underlying dollar total it's derived
-  // from.
-  const displayValue = convertUsdTo(totalUsdReal, currency, prices);
+  // for "USD", or that REAL total divided by the chosen coin's REAL price
+  // otherwise. Deliberately `realPrices` here, NOT the jittered `prices`
+  // — this used to divide by the jittered feed for non-USD currencies,
+  // which meant the main figure still visibly wobbled with fake "cut
+  // Redis costs" jitter even though its numerator (totalUsdReal) never
+  // did. Now the big figure is fully immune to jitter_all_tickers() in
+  // every currency mode; only the small "≈ X USDT" caption below still
+  // reads the jittered feed.
+  const displayValue = convertUsdTo(totalUsdReal, currency, realPrices);
 
   return (
     <div style={{ paddingTop: "var(--space-11)" }}>

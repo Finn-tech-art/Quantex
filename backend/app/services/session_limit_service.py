@@ -33,10 +33,9 @@ DEFAULT_DAILY_SESSION_LIMIT = 3
 # session runs longer than this many minutes — see is_free_tier() and
 # simulated_bot_service.create_simulated_bot. Independent of
 # fake_trading_service.SESSION_LENGTH_FULL_SCALE_MINUTES (the point at which
-# a session's profit/loss swing stops scaling down) — the two used to share
-# the same 30-minute value by coincidence, but that one has since moved to
-# 10 minutes on its own; this free-tier length cap is a separate product
-# decision and stays at 30 regardless.
+# a session's profit/loss swing stops scaling down, now 5 minutes — every
+# session length this app offers reaches full scale) — this free-tier
+# length cap is a separate product decision and stays at 30 regardless.
 FREE_TIER_MAX_SESSION_LENGTH_MINUTES = 30
 
 

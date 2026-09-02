@@ -104,18 +104,18 @@ def _should_think_this_tick(elapsed_seconds: float) -> bool:
 # even more variety; each is called with pair, remaining (fills left this
 # session), plural, minutes_left, elapsed_minutes, and pct_complete.
 _THINKING_TEMPLATES = [
-    "Still watching {pair}, {remaining} fill{plural} left to play out over the next {minutes_left:.0f} min.",
+    "Still watching {pair}, {remaining} fill{plural} left over the next {minutes_left:.0f} min.",
     "No new signal on {pair} yet. Holding position while the next few minutes unfold.",
-    "{minutes_left:.0f} minutes left in this session, {remaining} fill{plural} still scheduled.",
+    "{minutes_left:.0f} minutes left in this session, {remaining} fill{plural} still ahead.",
     "Nothing has crossed the next threshold on {pair} yet. Staying put for now.",
     "Checking order book depth on {pair} before committing to the next move.",
     "Price is inside the current grid band on {pair}, waiting for it to reach the next level.",
-    "About {pct_complete:.0f}% through this session. {remaining} fill{plural} still to come.",
+    "About {pct_complete:.0f}% through this session. {remaining} fill{plural} still ahead.",
     "Comparing the last few ticks on {pair} against the grid spacing before acting.",
     "Volatility looks manageable on {pair} right now, no reason to adjust the plan yet.",
-    "{elapsed_minutes:.0f} minutes in. Sticking to the scripted grid levels for {pair}.",
+    "{elapsed_minutes:.0f} minutes in. Sticking to the current grid levels for {pair}.",
     "Momentum on {pair} hasn't cleared the next threshold, so this level stays untouched.",
-    "Re-checking the spread on {pair} before the next scheduled fill.",
+    "Re-checking the spread on {pair} before the next fill.",
     "Session is {pct_complete:.0f}% complete. {remaining} fill{plural} remaining on {pair}.",
     "Watching for a pullback on {pair} before the next entry triggers.",
     "No action needed on {pair} this tick, conditions haven't changed enough yet.",

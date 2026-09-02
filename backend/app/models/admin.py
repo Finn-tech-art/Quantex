@@ -73,15 +73,33 @@ class AdminDailyStatsEntry(BaseModel):
     deposits_amount: str
 
 
+class AdminCountryStatsEntry(BaseModel):
+    # Bare ISO 3166-1 alpha-2 code (e.g. "US"), or the literal string
+    # "UNKNOWN" for users with no country on file yet — see
+    # admin_overview_service.get_country_breakdown's docstring. The
+    # frontend maps this to a display name via its own countries.js list
+    # (the same one the signup form's dropdown already uses), so this
+    # never carries a human-readable name itself.
+    country: str
+    signups: int
+    # Users from this country who have made at least one DEPOSIT ledger
+    # entry, ever — see get_country_breakdown's docstring for why this is
+    # the definition of "active" used here.
+    active: int
+
+
 class AdminOverviewResponse(BaseModel):
     signups_today: int
     deposits_today_count: int
     deposits_today_amount: str
     # Oldest first, one entry per UTC calendar day from the very first
     # signup/deposit ever recorded through today — see
-    # admin_overview_service.get_overview's docstring. Backs both the
-    # calendar heatmap and the line/bar charts on AdminOverviewPage.jsx.
+    # admin_overview_service.get_overview's docstring. Backs the day-picker
+    # calendar and the combined chart on AdminOverviewPage.jsx.
     daily: list[AdminDailyStatsEntry]
+    # Most-signups-first — backs the "signups by country" section on
+    # AdminOverviewPage.jsx, below the combined chart.
+    countries: list[AdminCountryStatsEntry]
 
 
 # ── Withdrawal fee setting ───────────────────────────────────────────────────

@@ -35,7 +35,17 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import AdminNav from "../components/AdminNav";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Icon from "../components/Icon";
+import { COUNTRIES } from "../data/countries";
 import { getAdminOverview } from "../lib/api";
+
+// Backend sends bare ISO codes ("US") for countries.signups/active, not
+// display names — this reuses the exact same list the signup form's own
+// country dropdown is built from (see SignupPage.jsx) rather than
+// duplicating a second copy of ~195 country names anywhere. "UNKNOWN" (the
+// literal string admin_overview_service.get_country_breakdown groups a
+// missing country under) isn't a real ISO code, so it's added here by
+// hand rather than expected to come from COUNTRIES.
+const COUNTRY_NAME_BY_CODE = Object.fromEntries(COUNTRIES.map((c) => [c.code, c.name]));
 
 // The pills under the combined chart — "all" always shows the FULL `daily`
 // array (whatever that spans), the other three take the last N calendar
@@ -155,6 +165,8 @@ export default function AdminOverviewPage() {
           }))}
           t={t}
         />
+
+        <CountryBreakdown countries={overview.countries} t={t} />
       </div>
     </div>
   );
@@ -692,6 +704,83 @@ function LegendItem({ shape, color, label }) {
         <span style={{ width: 12, height: 2, borderRadius: 1, background: color }} />
       )}
       <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--ink-soft)" }}>{label}</span>
+    </div>
+  );
+}
+
+// ── Signups by country — one row per country with at least one signup,
+// most-signups-first (already sorted that way by the backend — see
+// admin_overview_service.get_country_breakdown). "Active" is deliberately
+// NOT "currently online" or anything time-windowed — it's "has this
+// country's users made at least one real deposit, ever," which is what was
+// asked for ("how many have deposited or are active in that sense"). The
+// thin fill bar under each row is that same active/signups fraction, so
+// the country list doubles as an at-a-glance "where are real depositors
+// coming from" view, not just a raw signup-count leaderboard. ─────────────
+function CountryBreakdown({ countries, t }) {
+  return (
+    <div
+      style={{
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "var(--space-8)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+      }}
+    >
+      <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "12.5px", color: "var(--ink-base)" }}>
+        {t("admin.overview.countryBreakdownTitle")}
+      </span>
+
+      {countries.length === 0 ? (
+        <span style={{ fontFamily: "var(--font-body)", fontSize: "12px", color: "var(--ink-soft)" }}>
+          {t("admin.overview.noData")}
+        </span>
+      ) : (
+        // Capped height + internal scroll rather than letting the page grow
+        // unbounded once there are more than a handful of countries — same
+        // "wide/long content scrolls in its own container" rule the
+        // day-picker calendar and both charts above already follow.
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)", maxHeight: 280, overflowY: "auto" }}>
+          {countries.map((c) => (
+            <CountryRow key={c.country} entry={c} t={t} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CountryRow({ entry, t }) {
+  const name =
+    entry.country === "UNKNOWN" ? t("admin.overview.countryUnknown") : COUNTRY_NAME_BY_CODE[entry.country] || entry.country;
+  const activeFraction = entry.signups > 0 ? entry.active / entry.signups : 0;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--space-5)" }}>
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontWeight: 600,
+            fontSize: "12px",
+            color: "var(--ink-base)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {name}
+        </span>
+        <span className="qx-num" style={{ fontFamily: "var(--font-data)", fontSize: "11px", color: "var(--ink-soft)", whiteSpace: "nowrap" }}>
+          {t("admin.overview.countryStats", { signups: formatCount(entry.signups), active: formatCount(entry.active) })}
+        </span>
+      </div>
+      <div style={{ height: 4, borderRadius: 2, background: "var(--cream-base)", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${Math.round(activeFraction * 100)}%`, background: "var(--teal-base)", borderRadius: 2 }} />
+      </div>
     </div>
   );
 }

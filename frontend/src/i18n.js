@@ -293,6 +293,9 @@ const resources = {
           legendDeposits: 'Deposits ($)',
           noData: 'No activity recorded yet.',
           tooltipSignupsOnly: '{{count}} signup(s)',
+          countryBreakdownTitle: 'Signups by country',
+          countryUnknown: 'Unknown',
+          countryStats: '{{signups}} signups · {{active}} active',
         },
         winRate: {
           title: 'Daily win rate',

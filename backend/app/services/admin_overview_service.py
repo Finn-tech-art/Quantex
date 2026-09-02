@@ -66,6 +66,7 @@ def get_overview() -> dict:
         "deposits_today_amount": str,
         "daily": [ {"date": "YYYY-MM-DD", "signups": int,
                      "deposits_count": int, "deposits_amount": str}, ... ],
+        "countries": [ {"country": "US", "signups": int, "active": int}, ... ],
     }
 
     `daily` covers every UTC calendar day from the earliest signup or
@@ -75,6 +76,9 @@ def get_overview() -> dict:
     there's no data at all yet, `daily` is a single zero-filled entry for
     today, which is also where signups_today/deposits_today_* come from
     (always daily[-1] by construction, since the range always ends today).
+
+    `countries` is a completely separate, non-time-series breakdown — see
+    get_country_breakdown's own docstring for exactly what it counts.
     """
     today = datetime.now(tz=timezone.utc).date()
 
@@ -123,4 +127,47 @@ def get_overview() -> dict:
         "deposits_today_count": today_entry["deposits_count"],
         "deposits_today_amount": today_entry["deposits_amount"],
         "daily": daily,
+        "countries": get_country_breakdown(),
     }
+
+
+def get_country_breakdown() -> list[dict]:
+    """Returns one entry per country that has at least one signup, sorted
+    most-signups-first: [{"country": "US", "signups": int, "active": int}, ...].
+    `country` is the bare ISO 3166-1 alpha-2 code stored on the user's own
+    row (see 013_users_signup_fields.sql) — the router/frontend is what maps
+    that to a display name (frontend/src/data/countries.js already carries
+    that exact list, built for the signup form's own country dropdown, so
+    there's no reason to duplicate a second copy of ~195 country names here
+    in Python). A user with no country on file yet (a pre-migration account,
+    or a Google OAuth signup that hasn't been through the one-time country
+    picker — see ProtectedRoute.jsx's CountryGate) is grouped under the
+    literal string "UNKNOWN" rather than dropped, so this total always
+    reconciles with the platform's real signup count.
+
+    "active" counts users from that country who have made at least one
+    DEPOSIT ledger entry, ever — the plainest, least game-able definition of
+    "an account that's actually done something," and the same DEPOSIT
+    entry_type this whole module already reads for the deposits side of
+    `daily` above.
+    """
+    users = get_supabase().table("users").select("id,country").execute().data
+    deposit_rows = (
+        get_supabase()
+        .table("ledger_entries")
+        .select("user_id")
+        .eq("entry_type_id", _deposit_entry_type_id())
+        .execute()
+        .data
+    )
+    depositor_ids = {row["user_id"] for row in deposit_rows}
+
+    stats: dict[str, dict] = {}
+    for user in users:
+        country = user["country"] or "UNKNOWN"
+        bucket = stats.setdefault(country, {"country": country, "signups": 0, "active": 0})
+        bucket["signups"] += 1
+        if user["id"] in depositor_ids:
+            bucket["active"] += 1
+
+    return sorted(stats.values(), key=lambda b: b["signups"], reverse=True)

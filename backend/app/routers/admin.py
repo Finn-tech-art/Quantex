@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.admin import (
+    AdminCountryStatsEntry,
     AdminDailyStatsEntry,
     AdminLoginRequest,
     AdminOverviewResponse,
@@ -97,6 +98,7 @@ def get_overview(admin: dict = Depends(get_current_admin)):
         deposits_today_count=result["deposits_today_count"],
         deposits_today_amount=result["deposits_today_amount"],
         daily=[AdminDailyStatsEntry(**entry) for entry in result["daily"]],
+        countries=[AdminCountryStatsEntry(**entry) for entry in result["countries"]],
     )
 
 

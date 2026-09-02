@@ -71,6 +71,7 @@ const AdminLoginPage = lazyPageWithTranslations(() => import("./pages/AdminLogin
 const AdminOverviewPage = lazyPageWithTranslations(() => import("./pages/AdminOverviewPage"), () => import("./i18n/admin-en.js"), "admin");
 const AdminWinRatePage = lazyPageWithTranslations(() => import("./pages/AdminWinRatePage"), () => import("./i18n/admin-en.js"), "admin");
 const AdminSessionLimitsPage = lazyPageWithTranslations(() => import("./pages/AdminSessionLimitsPage"), () => import("./i18n/admin-en.js"), "admin");
+const AdminBalancePage = lazyPageWithTranslations(() => import("./pages/AdminBalancePage"), () => import("./i18n/admin-en.js"), "admin");
 const AdminWithdrawalFeePage = lazyPageWithTranslations(() => import("./pages/AdminWithdrawalFeePage"), () => import("./i18n/admin-en.js"), "admin");
 const AdminUnlockFeesPage = lazyPageWithTranslations(() => import("./pages/AdminUnlockFeesPage"), () => import("./i18n/admin-en.js"), "admin");
 const AdminKycQueuePage = lazyPageWithTranslations(() => import("./pages/AdminKycQueuePage"), () => import("./i18n/admin-en.js"), "admin");
@@ -232,6 +233,14 @@ function App() {
               element={
                 <AdminProtectedRoute>
                   <AdminSessionLimitsPage />
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/balance"
+              element={
+                <AdminProtectedRoute>
+                  <AdminBalancePage />
                 </AdminProtectedRoute>
               }
             />

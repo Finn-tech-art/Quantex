@@ -62,6 +62,37 @@ class SessionLimitResponse(BaseModel):
     is_default: bool
 
 
+# ── Admin manual balance adjustment ─────────────────────────────────────────
+class BalanceLookupResponse(BaseModel):
+    user_id: str
+    email: str
+    # Decimal STRING, USDT only — see admin_balance_service.ADJUSTABLE_ASSET's
+    # own comment for why this tool only ever touches one asset.
+    balance: str
+
+
+class AdjustBalanceRequest(BaseModel):
+    email: EmailStr
+    # Decimal STRING, not a float — see admin_balance_service.parse_amount's
+    # own comment. Positive credits, negative debits; never 0.
+    amount: str
+    # Optional free-text reason, stored in the ledger entry's own metadata
+    # so a later look at this user's ledger history explains why the
+    # adjustment happened, not just that it did.
+    note: str | None = None
+
+
+class AdjustBalanceResponse(BaseModel):
+    user_id: str
+    email: str
+    balance: str
+    applied: bool
+    # None when applied=True; "insufficient_balance" when a debit larger
+    # than the user's current balance was rejected — see
+    # admin_balance_service.adjust_balance's own docstring.
+    reason: str | None = None
+
+
 # ── Dashboard overview ───────────────────────────────────────────────────────
 class AdminDailyStatsEntry(BaseModel):
     date: str  # "YYYY-MM-DD", UTC calendar day

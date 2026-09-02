@@ -463,6 +463,21 @@ export function setSessionLimit(adminToken, { email, dailySessionLimit }) {
   });
 }
 
+// ── Admin manual balance adjustment ──────────────────────────────────────────
+export function getUserBalance(adminToken, email) {
+  return request(`/admin/balance/${encodeURIComponent(email)}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+}
+
+export function adjustUserBalance(adminToken, { email, amount, note }) {
+  return request("/admin/balance/adjust", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ email, amount, note: note || null }),
+  });
+}
+
 // ── Withdrawal fee setting ───────────────────────────────────────────────────
 export function getWithdrawalFee(adminToken) {
   return request("/admin/withdrawal-fee", {

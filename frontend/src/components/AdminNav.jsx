@@ -28,6 +28,7 @@ const LINKS = [
   { to: "/admin/overview", labelKey: "admin.nav.overview" },
   { to: "/admin/win-rate", labelKey: "admin.nav.winRate" },
   { to: "/admin/session-limits", labelKey: "admin.nav.sessionLimits" },
+  { to: "/admin/balance", labelKey: "admin.nav.balance" },
   { to: "/admin/kyc", labelKey: "admin.nav.kyc" },
   { to: "/admin/withdrawals", labelKey: "admin.nav.withdrawals" },
   { to: "/admin/withdrawal-fee", labelKey: "admin.nav.withdrawalFee" },

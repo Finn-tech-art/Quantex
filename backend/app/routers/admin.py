@@ -10,12 +10,15 @@ from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.admin import (
+    AdjustBalanceRequest,
+    AdjustBalanceResponse,
     AdminCountryStatsEntry,
     AdminDailyStatsEntry,
     AdminLoginRequest,
     AdminOverviewResponse,
     AdminProfile,
     AdminTokenResponse,
+    BalanceLookupResponse,
     ConsolidationAddressEntry,
     ConsolidationAddressesResponse,
     GenerateKeypairRequest,
@@ -52,6 +55,7 @@ from app.models.withdrawal_unlock_fee import (
 )
 from app.services import (
     admin_auth_service,
+    admin_balance_service,
     admin_overview_service,
     chain_watcher_service,
     custody_service,
@@ -181,6 +185,54 @@ def set_session_limit(body: SetSessionLimitRequest, admin: dict = Depends(get_cu
         email=user["email"],
         daily_session_limit=result["daily_session_limit"],
         is_default=session_limit_service.is_free_tier(result["daily_session_limit"]),
+    )
+
+
+# ── Admin manual balance adjustment ─────────────────────────────────────────
+# Looked up by email, same reasoning as session-limits above — an admin
+# thinks in emails, not UUIDs. Most commonly used to hand a fresh test
+# account (one that hasn't made a real deposit yet, still sitting at 0) a
+# starting USDT balance so it can actually create a bot — see
+# admin_balance_service.py's own module comment.
+@router.get("/balance/{email}", response_model=BalanceLookupResponse)
+def get_balance(email: str, admin: dict = Depends(get_current_admin)):
+    user = admin_balance_service.get_user_by_email(email)
+    if user is None:
+        raise HTTPException(status_code=404, detail="No user found for that email")
+    return BalanceLookupResponse(
+        user_id=user["id"],
+        email=user["email"],
+        balance=admin_balance_service.get_balance(user["id"]),
+    )
+
+
+@router.post("/balance/adjust", response_model=AdjustBalanceResponse)
+def adjust_balance(body: AdjustBalanceRequest, admin: dict = Depends(get_current_admin)):
+    user = admin_balance_service.get_user_by_email(body.email)
+    if user is None:
+        raise HTTPException(status_code=404, detail="No user found for that email")
+
+    try:
+        amount = admin_balance_service.parse_amount(body.amount)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    result = admin_balance_service.adjust_balance(
+        user_id=user["id"], amount=amount, admin_id=admin["id"], note=body.note
+    )
+    log_admin_action(
+        admin_id=admin["id"],
+        action="BALANCE_ADJUSTED",
+        target_type="users",
+        target_id=user["id"],
+        metadata={"email": body.email, "amount": body.amount, "note": body.note, "applied": result["applied"]},
+    )
+    return AdjustBalanceResponse(
+        user_id=user["id"],
+        email=user["email"],
+        balance=result["balance"],
+        applied=result["applied"],
+        reason=result["reason"],
     )
 
 

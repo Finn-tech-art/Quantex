@@ -30,6 +30,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AnimatedPsi from "../components/AnimatedPsi";
 import Avatar from "../components/Avatar";
+import AvatarGlyph, { AVATAR_OPTIONS } from "../components/AvatarGlyph";
 import CoinLogo from "../components/CoinLogo";
 import CurrencyPicker from "../components/CurrencyPicker";
 import DeltaChip from "../components/DeltaChip";
@@ -39,6 +40,7 @@ import ProfileDetailsSheet from "../components/ProfileDetailsSheet";
 import VerifyEmailPrompt from "../components/VerifyEmailPrompt";
 import useAssetPrices from "../hooks/useAssetPrices";
 import useCountUp from "../hooks/useCountUp";
+import useFlashOnChange, { FLASH_FADE_MS } from "../hooks/useFlashOnChange";
 import useDisplayCurrency from "../hooks/useDisplayCurrency";
 import { convertUsdTo, totalUsdValue } from "../lib/currency";
 import { getBalances, getMarkets, getPortfolioHistory, listBots } from "../lib/api";
@@ -376,6 +378,12 @@ function Sparkline({ points, height = 56, color }) {
   // remounting it), so each instance needs its own id rather than a
   // hardcoded string.
   const fadeId = useId();
+  // Id for the horizontal fade mask (left/right edges) — kept separate
+  // from fadeId's vertical color gradient because the two fades work on
+  // different axes and SVG can't blend two gradients into one fill; a
+  // <mask> is layered on top of the already-gradiented fill instead (see
+  // where areaPath is drawn below).
+  const sideMaskId = useId();
   const closes = points.map((p) => Number(p.close));
   const min = Math.min(...closes);
   const max = Math.max(...closes);
@@ -397,26 +405,49 @@ function Sparkline({ points, height = 56, color }) {
           </feMerge>
         </filter>
         {/*
-          Vertical fade for the area fill, top (near the line) to bottom
-          (the chart's floor). y1/y2 go 0 -> 1 in the default objectBoundingBox
+          Vertical fade for the area fill, from the line down to the
+          chart's floor. y1/y2 go 0 -> 1 in the default objectBoundingBox
           units, i.e. top of the SVG to bottom, regardless of the actual
-          height prop. Three stops rather than two so the fade eases out
-          gradually instead of reading as a single straight ramp: it opens
-          at 0.32 opacity right under the line, is already down to 0.14 by
-          the halfway point, and tapers the rest of the way to fully
-          transparent (0) at the bottom — that trailing-off curve is what
-          replaces the old hard-edged flat-opacity fill. To make the fade
-          start stronger or weaker, raise/lower the first stop's opacity;
-          to make it fade out faster or slower, move the middle stop's
-          offset earlier or later.
+          height prop. Both edges are soft now, not just the bottom: it
+          starts fully transparent right at the line (offset 0%), ramps up
+          to its strongest opacity a short distance below that (offset
+          12%), then eases back down through the middle (45%) to fully
+          transparent again at the floor (100%) — so there's no hard edge
+          at either the top or the bottom of the fill, just one soft band
+          of color between them. To push the peak band higher/lower, move
+          the 12% stop's offset; to make the peak stronger/weaker, raise
+          or lower its 0.32 opacity; to make the bottom fade out faster or
+          slower, move the 45% stop's offset earlier or later.
         */}
         <linearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.32" />
+          <stop offset="0%" stopColor={color} stopOpacity="0" />
+          <stop offset="12%" stopColor={color} stopOpacity="0.32" />
           <stop offset="45%" stopColor={color} stopOpacity="0.14" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
+        {/*
+          Horizontal fade mask for the left/right edges. An SVG <mask>
+          works in luminance: white = fully shows whatever it's masking,
+          transparent/black = hides it, and anything in between blends —
+          so a white rect painted with THIS gradient (opacity ramping
+          0 -> 1 -> 1 -> 0 left to right) fades the masked element's own
+          edges in and out without touching its color. Applied to areaPath
+          below alongside the fadeId color gradient, the two combine so
+          all four edges of the fill are soft rather than just top/bottom.
+          8% is how far in from each side the fade reaches full strength —
+          raise it for a wider fade, lower it for a narrower one.
+        */}
+        <linearGradient id={sideMaskId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="white" stopOpacity="0" />
+          <stop offset="8%" stopColor="white" stopOpacity="1" />
+          <stop offset="92%" stopColor="white" stopOpacity="1" />
+          <stop offset="100%" stopColor="white" stopOpacity="0" />
+        </linearGradient>
+        <mask id={`${sideMaskId}-mask`}>
+          <rect x="0" y="0" width={width} height={height} fill={`url(#${sideMaskId})`} />
+        </mask>
       </defs>
-      <path d={areaPath} fill={`url(#${fadeId})`} stroke="none" />
+      <path d={areaPath} fill={`url(#${fadeId})`} stroke="none" mask={`url(#${sideMaskId}-mask)`} />
       <path
         d={linePath}
         fill="none"
@@ -902,8 +933,14 @@ const LEADERBOARD_NAMES = [
 
 // Strategy tag randomly assigned to each of this week's 3 top traders —
 // purely decorative flavor text, not tied to any bot a trader actually
-// ran.
-const LEADERBOARD_STRATEGIES = ["Grid", "DCA", "Momentum"];
+// ran. "Arithmetic" and "Geometric" are the two real grid-spacing modes
+// this app's own Grid strategy is built around (equal $ spacing between
+// grid lines vs. equal % spacing) — same real trading-bot terminology
+// Binance/Bybit's own grid-bot setup screens use, kept to just these two
+// (rather than also listing DCA/Momentum here) since a LEADERBOARD row
+// is meant to read as "a grid trader running one of the two grid modes",
+// not a strategy picker.
+const LEADERBOARD_STRATEGIES = ["Arithmetic", "Geometric"];
 
 // Simulated balance range (USDT) for this week's top traders — the ask
 // was specifically "above ten of thousands", so the floor is fixed at
@@ -936,7 +973,14 @@ function pickWeeklyLeaderboard() {
       const random = mulberry32(hashStringToSeed(`leaderboard-detail-${name}-${weekKey}`));
       const balance = LEADERBOARD_BALANCE_MIN + random() * (LEADERBOARD_BALANCE_MAX - LEADERBOARD_BALANCE_MIN);
       const strategy = LEADERBOARD_STRATEGIES[Math.floor(random() * LEADERBOARD_STRATEGIES.length)];
-      return { name, balance, strategy };
+      // Same hand-drawn avatars real users pick via AvatarPicker.jsx (see
+      // AvatarGlyph.jsx) — reusing AVATAR_OPTIONS.length rather than a
+      // hardcoded count means this stays correct automatically if that
+      // array ever grows. Drawn from this trader's own seeded `random`
+      // (not a fresh Math.random()) so the same name keeps the same
+      // avatar for the whole week, exactly like its balance/strategy do.
+      const avatarId = Math.floor(random() * AVATAR_OPTIONS.length);
+      return { name, balance, strategy, avatarId };
     })
     .sort((a, b) => b.balance - a.balance);
 }
@@ -956,11 +1000,63 @@ function LeaderboardSection({ t }) {
   );
 }
 
-// One row — rank number takes the place of BotCard/Leaderboard's old
-// single initial-letter avatar (a plain "Q"), so the ranking itself is
-// legible at a glance rather than needing a separate badge alongside a
-// name-initial avatar.
+// Nudges `baseValue` by a small random +/- percentage on a random
+// interval, forever, for as long as the calling component stays mounted —
+// purely decorative "this looks like it's ticking live" motion for the
+// leaderboard's fake balances, not tied to any real price feed the way
+// TradePage/MarketsPage's numbers are. Deliberately NOT seeded off the
+// week/name the way pickWeeklyLeaderboard's own numbers are — the base
+// balance still needs to be stable per trader per week (so reloading the
+// page doesn't reshuffle who's "winning"), but the live jitter on TOP of
+// that is meant to look different every time you happen to be looking at
+// it, the same way a real live ticker never repeats the same wiggle twice.
+// A plain chained setTimeout (not setInterval) so each tick can pick its
+// OWN random delay before scheduling the next one, rather than ticking on
+// a fixed cadence that would start to feel mechanical.
+function useLiveJitter(baseValue, { minMs = 2000, maxMs = 6000, maxPct = 0.004 } = {}) {
+  const [value, setValue] = useState(baseValue);
+  const valueRef = useRef(baseValue);
+
+  useEffect(() => {
+    valueRef.current = baseValue;
+    setValue(baseValue);
+
+    let timer;
+    function tick() {
+      const pct = (Math.random() * 2 - 1) * maxPct;
+      valueRef.current = valueRef.current * (1 + pct);
+      setValue(valueRef.current);
+      timer = setTimeout(tick, minMs + Math.random() * (maxMs - minMs));
+    }
+    timer = setTimeout(tick, minMs + Math.random() * (maxMs - minMs));
+
+    return () => clearTimeout(timer);
+  }, [baseValue, minMs, maxMs, maxPct]);
+
+  return value;
+}
+
+// One row — AvatarGlyph takes the place of the old plain rank-number
+// circle, with the rank instead folded into the subtext line below the
+// name (see AvatarGlyph.jsx for the full "chosen from a list" avatar
+// system this and every real user's own avatar now share).
 function LeaderboardRow({ rank, trader }) {
+  const liveBalance = useLiveJitter(trader.balance);
+  // Same snap-in/fade-out mechanics TradePage's price header and
+  // MarketsPage's rows use for their real live prices (see
+  // useFlashOnChange's own doc comment) — applied here to a fake but
+  // "live-looking" number instead of a real one, for the same reason: a
+  // number that silently changes underneath you is much easier to miss
+  // than one that visibly flashes the moment it moves. The resting color
+  // is always --gain (a "top trader" leaderboard is never meant to show
+  // red), so only a downward tick actually reads as a different color
+  // for a moment before settling back to green — an upward tick's flash
+  // and resting color are the same, which is fine, since the STOPPED
+  // point of this is "prove it's alive", not "show direction".
+  const flash = useFlashOnChange(liveBalance);
+  const flashColor = flash && !flash.fading ? (flash.direction === "up" ? "var(--gain)" : "var(--loss)") : "var(--gain)";
+  const flashTransition = flash?.fading ? `color ${FLASH_FADE_MS}ms ease` : "none";
+
   return (
     <div
       style={{
@@ -974,34 +1070,18 @@ function LeaderboardRow({ rank, trader }) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
-        <div
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: "var(--radius-full)",
-            background: "var(--teal-pale)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontFamily: "var(--font-display)",
-            fontWeight: 700,
-            fontSize: "13px",
-            color: "var(--teal-deep)",
-          }}
-        >
-          {rank}
-        </div>
+        <AvatarGlyph avatarId={trader.avatarId} size={34} />
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "13px", color: "var(--ink-base)" }}>
             {trader.name}
           </span>
           <span style={{ fontFamily: "var(--font-data)", fontSize: "10px", color: "var(--ink-soft)" }}>
-            {trader.strategy} • Top trader this week
+            #{rank} • {trader.strategy} • Top trader this week
           </span>
         </div>
       </div>
-      <span className="qx-num" style={{ fontFamily: "var(--font-data)", fontSize: "13px", color: "var(--gain)" }}>
-        ${trader.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      <span className="qx-num" style={{ fontFamily: "var(--font-data)", fontSize: "13px", color: flashColor, transition: flashTransition }}>
+        ${liveBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </span>
     </div>
   );

@@ -81,6 +81,16 @@ function baseAsset(pair) {
   return pair.split("/")[0];
 }
 
+// Rounds UP to the next whole hour so this never reads "0 hours" in the
+// last few minutes before the reset — the daily count resets at UTC
+// midnight (see session_limit_service.today_utc), so this is just "how far
+// from right now to the next UTC midnight," clamped to at least 1.
+function hoursUntilUtcReset() {
+  const now = new Date();
+  const nextMidnightUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0);
+  return Math.max(1, Math.ceil((nextMidnightUtc - now.getTime()) / 3_600_000));
+}
+
 export default function CreateBotPage() {
   const { t } = useTranslation();
   const { accessToken, user } = useAuth();
@@ -96,17 +106,15 @@ export default function CreateBotPage() {
     ? SESSION_LENGTHS.filter((minutes) => minutes <= FREE_TIER_MAX_SESSION_LENGTH_MINUTES)
     : SESSION_LENGTHS;
 
-  // How many bot configurations this user has left today — see
-  // session_limit_service.py's module comment for why "configure a bot" is
-  // the thing being counted (a simulated bot runs exactly one session and
-  // then caps, so creating a new one is how a user starts another session).
   // user.daily_session_limit/sessions_used_today come straight off
   // UserProfile (see models/auth.py) — both default to sensible values
-  // (3 / 0) while `user` is still null on first load, so this never briefly
-  // shows "0 left" before the real profile arrives.
+  // (3 / 0) while `user` is still null on first load. Deliberately NOT
+  // checked up front to gate the whole page — a user only finds out they're
+  // out of budget for today at the same "Create bot" tap that already does
+  // the balance check below, not before they've even started filling out
+  // the form. See handleSubmit.
   const dailySessionLimit = user?.daily_session_limit ?? DEFAULT_DAILY_SESSION_LIMIT;
   const sessionsUsedToday = user?.sessions_used_today ?? 0;
-  const limitReached = sessionsUsedToday >= dailySessionLimit;
 
   const [pair, setPair] = useState(PAIRS[0]);
   const [gridMode, setGridMode] = useState(GRID_MODES[0]);
@@ -143,6 +151,18 @@ export default function CreateBotPage() {
 
   function handleSubmit(e) {
     e.preventDefault();
+    // Checked here, at the "Create bot" tap — not earlier, so a user who's
+    // already used up today's budget still gets to see and fill out the
+    // form; they only find out at the exact moment they'd otherwise have
+    // opened the confirm sheet. Same spot the balance check below runs, and
+    // same "friendlier early rejection, backend stays authoritative"
+    // reasoning — simulated_bot_service.create_simulated_bot re-checks this
+    // fresh regardless, so a stale sessions_used_today here can never let a
+    // request through that the backend wouldn't have allowed anyway.
+    if (sessionsUsedToday >= dailySessionLimit) {
+      setError(t("bots.create.dailyLimitReached", { limit: dailySessionLimit, hours: hoursUntilUtcReset() }));
+      return;
+    }
     // usdtBalance === null (still loading) doesn't block submission — the
     // backend check is authoritative either way, this is purely an early,
     // friendlier rejection when the balance IS already known.
@@ -196,10 +216,6 @@ export default function CreateBotPage() {
           </span>
         </div>
 
-        {limitReached ? (
-          <LimitReachedCard dailySessionLimit={dailySessionLimit} t={t} />
-        ) : (
-          <>
         <div
           style={{
             background: "var(--teal-pale)",
@@ -313,32 +329,7 @@ export default function CreateBotPage() {
           confirming={submitting}
           onConfirm={handleConfirmCreate}
         />
-          </>
-        )}
       </div>
-    </div>
-  );
-}
-
-function LimitReachedCard({ dailySessionLimit, t }) {
-  return (
-    <div
-      style={{
-        background: "var(--cream-deep)",
-        border: "1px solid var(--cream-line)",
-        borderRadius: "var(--radius-lg)",
-        padding: "var(--space-8)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-5)",
-      }}
-    >
-      <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "13px", color: "var(--ink-base)" }}>
-        {t("bots.create.limitReachedTitle")}
-      </span>
-      <span style={{ fontFamily: "var(--font-body)", fontSize: "12px", color: "var(--ink-soft)", lineHeight: 1.5 }}>
-        {t("bots.create.limitReachedBody", { limit: dailySessionLimit })}
-      </span>
     </div>
   );
 }

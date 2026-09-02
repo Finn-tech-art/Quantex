@@ -84,15 +84,14 @@ function TopNav({ t }) {
       <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "18px", color: "var(--ink-base)" }}>
         {t("wallet.title")}
       </span>
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
-        {/* Opens WalletHistoryPage.jsx — the full ledger activity list that
-            used to render inline at the bottom of this page as "Recent
-            activity" (see that page's own module comment). */}
-        <Link to="/wallet/history" style={{ display: "flex" }}>
-          <Icon name="history" size={18} color="var(--ink-soft)" />
-        </Link>
-        <Icon name="moreDots" size={18} color="var(--ink-soft)" />
-      </div>
+      {/* Opens WalletHistoryPage.jsx — the full ledger activity list that
+          used to render inline at the bottom of this page as "Recent
+          activity" (see that page's own module comment). The overflow
+          "···" menu that used to sit next to this was removed — it had
+          no menu behind it, so it was just a dead icon taking up space. */}
+      <Link to="/wallet/history" style={{ display: "flex" }}>
+        <Icon name="history" size={18} color="var(--ink-soft)" />
+      </Link>
     </div>
   );
 }
@@ -164,7 +163,15 @@ function HeroCard({ displayValue, currency, onCurrencyChange, loading, onWithdra
       )}
 
       <div style={{ display: "flex", gap: "var(--space-4)" }}>
-        <Link to="/deposit" style={{ flex: 1, textDecoration: "none" }}>
+        {/* `display: "flex"` here (on top of `flex: 1`) matters: without it
+            this <Link> is just a block box that happens to be 1/3 of the
+            row's width, and the ActionPill button inside it — which isn't
+            itself a flex item of the row, only a normal child of the Link —
+            would shrink-wrap its text instead of filling that width. Making
+            the Link a flex container of its own lets the button's `flex: 1`
+            (set inside ActionPill) stretch to fill it, so the colored pill
+            matches the Withdraw/History pills instead of leaving a gap. */}
+        <Link to="/deposit" style={{ flex: 1, display: "flex", textDecoration: "none" }}>
           <ActionPill label={t("wallet.deposit")} />
         </Link>
         <ActionPill label={t("wallet.withdraw")} onClick={onWithdrawClick} />

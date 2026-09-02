@@ -21,14 +21,14 @@ const APP_URL = "https://trading.onquantex.com";
 
   <section class="qx-section">
     <div class="qx-container qx-prose">
-      <h2>The exchange keys can trade. They can't withdraw.</h2>
+      <h2>The Binance keys can trade. They can't withdraw.</h2>
       <p>
         Every bot, and every spot trade, executes through Quantex's own
-        exchange API keys. Those keys are generated with read and trade
+        Binance API keys. Those keys are generated with read and trade
         permissions only. Withdrawal permission is never granted on them:
         not disabled after the fact, never enabled in the first place.
         Even if those keys were somehow exposed, they physically couldn't
-        move funds off the exchange. The exchange itself would refuse the
+        move funds off Binance. Binance itself would refuse the
         request.
       </p>
     </div>
@@ -72,7 +72,7 @@ const APP_URL = "https://trading.onquantex.com";
     <div class="qx-container qx-prose">
       <h2>Bots fail safe, not silent</h2>
       <p>
-        If a bot can't reach the exchange, it doesn't sit there retrying
+        If a bot can't reach Binance, it doesn't sit there retrying
         forever, and it doesn't fail quietly either. After a handful of
         failed attempts in a row, it pauses itself automatically, and
         you're notified by email and browser push that it paused and why.

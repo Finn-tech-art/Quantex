@@ -519,6 +519,31 @@ function WithdrawForm({ accessToken, balances, onRequested, t }) {
   const amountNumber = Number(amount) || 0;
   const netAmount = fee === null ? 0 : Math.max(amountNumber - fee, 0);
 
+  // Whether the currently-picked asset actually has a withdrawal network at
+  // all — false for BTC/ETH/SOL, which only exist as TradePage.jsx trading
+  // pairs against USDT (see trading_service.py's SUPPORTED_PAIRS) with no
+  // real wallet/custody/sweep infrastructure behind them, unlike ASSET_
+  // NETWORKS' entries. Drives the placeholder branch below instead of
+  // rendering a network SelectField with zero options in it.
+  const isWithdrawable = Boolean(asset && ASSET_NETWORKS[asset]?.length);
+
+  // The largest amount (in the same units as the amount FIELD, i.e. gross —
+  // before the flat fee is taken out) that still leaves at least
+  // BALANCE_FLOOR behind, matching withdrawal_service.py's own
+  // BALANCE_FLOOR_AFTER_WITHDRAWAL check (`available - amount >= floor`,
+  // where the full `amount` — not just net_amount — is what actually gets
+  // debited once the fee's own separate ledger entry is added in). Clamped
+  // to 0 rather than going negative when the user's whole balance is
+  // already at or under the floor — see the Max button's `disabled` below.
+  // .toFixed(6) matches USDT's on-chain decimals (network_assets.NETWORK_
+  // CONFIG's TRC20 entry) — change this if a future withdrawable asset uses
+  // a different decimal count.
+  const maxAmount = Math.max(available - BALANCE_FLOOR, 0);
+
+  function handleMax() {
+    setAmount(maxAmount.toFixed(6));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
@@ -543,76 +568,137 @@ function WithdrawForm({ accessToken, balances, onRequested, t }) {
         renderIcon={(a) => <CoinGlyph asset={a} size={20} />}
       />
 
-      <SelectField
-        label={t("withdraw.networkLabel")}
-        options={asset ? ASSET_NETWORKS[asset] || [] : []}
-        value={network}
-        onChange={setNetwork}
-        renderIcon={(n) => <NetworkGlyph network={n} size={20} />}
-      />
+      {asset && !isWithdrawable ? (
+        <NotWithdrawableNotice asset={asset} t={t} />
+      ) : (
+        <>
+          <SelectField
+            label={t("withdraw.networkLabel")}
+            options={asset ? ASSET_NETWORKS[asset] || [] : []}
+            value={network}
+            onChange={setNetwork}
+            renderIcon={(n) => <NetworkGlyph network={n} size={20} />}
+          />
 
-      <Field
-        label={t("withdraw.addressLabel")}
-        type="text"
-        value={destinationAddress}
-        onChange={setDestinationAddress}
-        autoComplete="off"
-      />
+          <Field
+            label={t("withdraw.addressLabel")}
+            type="text"
+            value={destinationAddress}
+            onChange={setDestinationAddress}
+            autoComplete="off"
+          />
 
-      <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-        <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "11px", color: "var(--ink-soft)" }}>
-          {t("withdraw.amountLabel")}
-        </span>
-        <input
-          type="number"
-          min="0"
-          step="any"
-          required
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          style={{
-            background: "var(--cream-deep)",
-            border: "1px solid var(--cream-line)",
-            borderRadius: "var(--radius-md)",
-            padding: "13px 14px",
-            fontFamily: "var(--font-data)",
-            fontSize: "13px",
-            color: "var(--ink-base)",
-            outline: "none",
-          }}
-        />
-        {asset && (
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--ink-soft)" }}>
-            {t("withdraw.availableLabel", { amount: available, asset })}
-          </span>
-        )}
-      </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <span style={{ fontFamily: "var(--font-body)", fontWeight: 500, fontSize: "11px", color: "var(--ink-soft)" }}>
+              {t("withdraw.amountLabel")}
+            </span>
+            <div style={{ display: "flex", gap: "var(--space-4)" }}>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                required
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: "var(--cream-deep)",
+                  border: "1px solid var(--cream-line)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "13px 14px",
+                  fontFamily: "var(--font-data)",
+                  fontSize: "13px",
+                  color: "var(--ink-base)",
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleMax}
+                disabled={maxAmount <= 0}
+                style={{
+                  background: "var(--cream-deep)",
+                  border: "1px solid var(--cream-line)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "0 14px",
+                  fontFamily: "var(--font-body)",
+                  fontWeight: 600,
+                  fontSize: "12px",
+                  color: maxAmount <= 0 ? "var(--ink-soft)" : "var(--teal-base)",
+                  cursor: maxAmount <= 0 ? "default" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {t("withdraw.max")}
+              </button>
+            </div>
+            {asset && (
+              <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--ink-soft)" }}>
+                {t("withdraw.availableLabel", { amount: available, asset })}
+              </span>
+            )}
+          </label>
 
-      {asset && (
-        <div
-          style={{
-            background: "var(--teal-pale)",
-            border: "1px solid var(--teal-base)",
-            borderRadius: "var(--radius-lg)",
-            padding: "var(--space-6)",
-          }}
-        >
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--teal-deep)", lineHeight: 1.5 }}>
-            {t("withdraw.minNotice", { min: MIN_WITHDRAWAL_AMOUNT, floor: BALANCE_FLOOR, asset })}
-          </span>
-        </div>
+          {asset && (
+            <div
+              style={{
+                background: "var(--teal-pale)",
+                border: "1px solid var(--teal-base)",
+                borderRadius: "var(--radius-lg)",
+                padding: "var(--space-6)",
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-body)", fontSize: "10.5px", color: "var(--teal-deep)", lineHeight: 1.5 }}>
+                {t("withdraw.minNotice", { min: MIN_WITHDRAWAL_AMOUNT, floor: BALANCE_FLOOR, asset })}
+              </span>
+            </div>
+          )}
+
+          {asset && amountNumber > 0 && fee !== null && (
+            <FeeBreakdown amount={amountNumber} fee={fee} net={netAmount} asset={asset} t={t} />
+          )}
+
+          {error && <ErrorText message={error} />}
+
+          <PrimaryButton submitting={submitting}>
+            {submitting ? t("withdraw.submitting") : t("withdraw.submit")}
+          </PrimaryButton>
+        </>
       )}
-
-      {asset && amountNumber > 0 && fee !== null && (
-        <FeeBreakdown amount={amountNumber} fee={fee} net={netAmount} asset={asset} t={t} />
-      )}
-
-      {error && <ErrorText message={error} />}
-
-      <PrimaryButton submitting={submitting}>
-        {submitting ? t("withdraw.submitting") : t("withdraw.submit")}
-      </PrimaryButton>
     </form>
+  );
+}
+
+// Shown instead of the network/address/amount form when the picked asset
+// has no withdrawal network at all (BTC/ETH/SOL today — see isWithdrawable's
+// own comment above in WithdrawForm). Kept as a plain notice rather than
+// hiding these assets from the picker entirely: they're real, spendable
+// balances (from TradePage.jsx), so a user should be able to select one and
+// immediately understand why they can't withdraw it from here, rather than
+// wondering why it's missing.
+function NotWithdrawableNotice({ asset, t }) {
+  return (
+    <div
+      style={{
+        background: "var(--cream-deep)",
+        border: "1px solid var(--cream-line)",
+        borderRadius: "var(--radius-lg)",
+        padding: "var(--space-8)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-5)",
+      }}
+    >
+      <span style={{ fontFamily: "var(--font-body)", fontSize: "12.5px", color: "var(--ink-base)", lineHeight: 1.5 }}>
+        {t("withdraw.notWithdrawableBody", { asset })}
+      </span>
+      <Link to="/trade" style={{ textDecoration: "none" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "12.5px", color: "var(--teal-base)" }}>
+          {t("withdraw.tradeLink")} →
+        </span>
+      </Link>
+    </div>
   );
 }
 

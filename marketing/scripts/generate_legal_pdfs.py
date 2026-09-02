@@ -121,12 +121,12 @@ tos_sections = [
      "an account or use the service.", None),
 
     ("2. What Quantex Is",
-     "Quantex is a custodial crypto trading platform. You deposit crypto into "
+     "Quantex is a custodial crypto broker. You deposit crypto into "
      "a Quantex-controlled wallet, and Quantex holds it on your behalf in a "
-     "single pooled master exchange account. From there you can trade spot "
+     "single pooled master Binance account. From there you can trade spot "
      "markets yourself, or deploy an automated bot (Grid, DCA, or Momentum) "
      "that trades on your behalf within the parameters you set. Quantex is "
-     "not a bank, brokerage, or investment advisor, and nothing on this site "
+     "not a bank or investment advisor, and nothing on this site "
      "or in the app is investment advice.", None),
 
     ("3. Eligibility",
@@ -162,11 +162,11 @@ tos_sections = [
      "action, and may change over time.", None),
 
     ("8. Custody and Execution",
-     "Deposits are pooled and traded from a single master exchange account "
+     "Deposits are pooled and traded from a single master Binance account "
      "under Quantex's control. Your in-app balance reflects your share of "
      "that pool, tracked internally as an append-only ledger. The API keys "
-     "Quantex uses to trade on the underlying exchange are configured for "
-     "trading only and never carry withdrawal permission on that exchange.", None),
+     "Quantex uses to trade on Binance are configured for "
+     "trading only and never carry withdrawal permission on that account.", None),
 
     ("9. Prohibited Uses",
      "You agree not to use Quantex for money laundering, terrorist "
@@ -228,14 +228,14 @@ privacy_sections = [
      "ID documents and selfies are stored in a private, access-restricted "
      "storage bucket, separate from your regular account data. Only the "
      "review team can access them, through short-lived signed links "
-     "generated at review time. They are not shared with the exchange "
-     "Quantex trades on, since trading runs from a single pooled account "
+     "generated at review time. They are not shared with Binance, "
+     "which Quantex trades on, since trading runs from a single pooled account "
      "rather than one connected per user.", None),
 
     ("5. Service Providers",
      "Quantex relies on a small number of service providers to operate: a "
      "database and authentication provider, an email provider for "
-     "transactional messages, and the underlying exchange used for trade "
+     "transactional messages, and Binance, used for trade "
      "execution. These providers only receive the information needed to "
      "perform their specific function.", None),
 
@@ -251,7 +251,7 @@ privacy_sections = [
      "required to keep, by contacting support.", None),
 
     ("8. Security",
-     "Exchange API keys used to trade on your behalf are configured for "
+     "Binance API keys used to trade on your behalf are configured for "
      "trading only and can never withdraw funds. Withdrawals from Quantex "
      "itself require identity verification before they can be requested. "
      "No method of storing or transmitting data is 100% secure, and Quantex "

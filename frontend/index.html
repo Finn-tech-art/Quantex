@@ -5,6 +5,32 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quantex</title>
+
+    <!-- Google Fonts, loaded as <link> tags instead of the @import that used
+         to live in index.css. A CSS @import can't start fetching until the
+         browser has already downloaded and begun parsing the file that
+         contains it — so it was: fetch index.css, THEN discover the font
+         CSS, THEN fetch that, THEN discover and fetch the actual .woff2
+         font files. That's three sequential round trips stacked before any
+         text renders in its real font, which stings badly on a slow/high-
+         latency connection.
+         The two tags below fix that:
+           1. preconnect opens the connection (DNS + TLS handshake) to
+              Google's font servers immediately, in parallel with everything
+              else the page is doing — so by the time the stylesheet below
+              needs to fetch actual font files, that connection is already
+              warm.
+           2. The stylesheet link starts fetching the font CSS itself right
+              away, in parallel with index.css, instead of waiting for
+              index.css to finish first.
+         To add/change fonts, edit the family list in the href below (same
+         Google Fonts URL format as before) — no need to touch index.css. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>

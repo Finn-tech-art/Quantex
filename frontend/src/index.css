@@ -1,5 +1,8 @@
 @import "tailwindcss";
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap");
+/* Google Fonts are now loaded via <link> tags in index.html (preconnect +
+   stylesheet), not this @import — see the comment there for why. Keep font
+   loading there, not here, so the browser can start fetching font files in
+   parallel with this stylesheet instead of only after it. */
 
 :root {
   /* Color — Cream */

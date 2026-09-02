@@ -284,17 +284,17 @@ function HeroCard({ displayValue, totalUsd, currency, onCurrencyChange, history,
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
             <BalanceFigure key={currency} value={displayValue} currency={currency} hidden={balanceHidden} />
 
-            {/* Bybit-style "≈ X USDT" caption — always the live USD/USDT
-                total (see totalUsdValue() in lib/currency.js, and that
-                file's STABLECOIN_ASSETS treating USDT 1:1 with USD),
-                regardless of which currency the picker above is set to.
-                Ticks on its own every time useAssetPrices' poll lands a
-                fresh price map (see that hook's own comment), the same
-                way the main figure above it does. `totalUsd` can still be
-                null for a tick after balances resolve if it's waiting on
-                one more asset's price, so this is gated separately from
-                the main `loading` check above rather than assumed ready
-                whenever displayValue is. */}
+            {/* Bybit-style "≈ X USDT" caption — the (deliberately jittered)
+                USD/USDT total, see totalUsdReal/totalUsd's own comments
+                above for why this reads from the jittered `prices` feed
+                while the big figure above it reads from the stable
+                `realPrices` one instead. Ticks on its own every time
+                useAssetPrices' poll lands a fresh price map (see that
+                hook's own comment) — the big figure does NOT move with
+                it. `totalUsd` can still be null for a tick after balances
+                resolve if it's waiting on one more asset's price, so this
+                is gated separately from the main `loading` check above
+                rather than assumed ready whenever displayValue is. */}
             {totalUsd != null && (
               <span style={{ fontFamily: "var(--font-data)", fontSize: "11px", color: "var(--teal-sage)" }}>
                 {balanceHidden

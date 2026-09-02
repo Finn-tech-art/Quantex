@@ -31,11 +31,12 @@ DEFAULT_DAILY_SESSION_LIMIT = 3
 
 # A user at or below DEFAULT_DAILY_SESSION_LIMIT cannot create a bot whose
 # session runs longer than this many minutes — see is_free_tier() and
-# simulated_bot_service.create_simulated_bot. Deliberately the same 30-minute
-# point fake_trading_service.SESSION_LENGTH_FULL_SCALE_MINUTES uses as its
-# "full scale" threshold (not imported from there — the two constants
-# happening to share a value is a product choice, not a code dependency;
-# change one without the other if that's ever no longer wanted).
+# simulated_bot_service.create_simulated_bot. Independent of
+# fake_trading_service.SESSION_LENGTH_FULL_SCALE_MINUTES (the point at which
+# a session's profit/loss swing stops scaling down) — the two used to share
+# the same 30-minute value by coincidence, but that one has since moved to
+# 10 minutes on its own; this free-tier length cap is a separate product
+# decision and stays at 30 regardless.
 FREE_TIER_MAX_SESSION_LENGTH_MINUTES = 30
 
 

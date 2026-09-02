@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -46,25 +46,45 @@ export default function WalletPage() {
     getBalances(accessToken).then((res) => setBalances(res.balances));
   }, [accessToken]);
 
-  // The REAL total (never jittered) — null (not a wrong number) until
-  // balances have loaded AND every held asset is priced, see
-  // totalUsdValue()'s own doc comment. This is what HeroCard's big figure
-  // is built from (via displayValue below) — "the balance itself" isn't
-  // meant to move with fake noise, only the small equivalency caption is.
-  const totalUsdReal = balances ? totalUsdValue(balances, realPrices) : null;
+  // A one-time snapshot of `realPrices`, captured the moment it first
+  // becomes available, then held fixed for the rest of this mount — even
+  // though useRealAssetPrices keeps polling live prices every 15s in the
+  // background, the main balance figure below is built from THIS frozen
+  // copy, not the ever-ticking live value. That's deliberate: the big
+  // figure is meant to read as "your actual balance" — it should match
+  // what was deposited and what bot trading has added/subtracted (both
+  // reflected by the getBalances() fetch above), and stay put between
+  // those real events, not visibly shift just because the market ticked.
+  // Only the small "≈ X USDT" caption underneath is supposed to look
+  // alive from one poll to the next, the way Bybit's does. Re-mounting
+  // this page (e.g. navigating away and back) re-fetches balances AND
+  // re-captures a fresh snapshot, so a real deposit/trade since your last
+  // visit still shows up correctly — this only ignores price movement
+  // *within* one visit, never a real balance change.
+  const realPricesSnapshotRef = useRef(null);
+  if (realPricesSnapshotRef.current === null && realPrices != null) {
+    realPricesSnapshotRef.current = realPrices;
+  }
+
+  // The REAL total (never jittered, and never re-ticked mid-visit — see
+  // realPricesSnapshotRef above) — null (not a wrong number) until
+  // balances have loaded AND every held asset was priced at snapshot
+  // time, see totalUsdValue()'s own doc comment. This is what HeroCard's
+  // big figure is built from (via displayValue below) — "the balance
+  // itself" isn't meant to move at all once shown, only the small
+  // equivalency caption is.
+  const totalUsdReal = balances ? totalUsdValue(balances, realPricesSnapshotRef.current) : null;
   // The (deliberately jittered) total shown ONLY in the small "≈ X USDT"
   // caption underneath the big figure — see HeroCard below.
   const totalUsd = balances ? totalUsdValue(balances, prices) : null;
   // The figure HeroCard's big number actually shows — totalUsdReal itself
-  // for "USD", or that REAL total divided by the chosen coin's REAL price
-  // otherwise. Deliberately `realPrices` here, NOT the jittered `prices`
-  // — this used to divide by the jittered feed for non-USD currencies,
-  // which meant the main figure still visibly wobbled with fake "cut
-  // Redis costs" jitter even though its numerator (totalUsdReal) never
-  // did. Now the big figure is fully immune to jitter_all_tickers() in
-  // every currency mode; only the small "≈ X USDT" caption below still
-  // reads the jittered feed.
-  const displayValue = convertUsdTo(totalUsdReal, currency, realPrices);
+  // for "USD", or that REAL total divided by the chosen coin's price
+  // otherwise. Deliberately the FROZEN realPricesSnapshotRef here, not
+  // the live-polling `realPrices` or the jittered `prices` — either of
+  // those would still let the big figure visibly move between real
+  // balance changes, which is exactly what this is meant to avoid. Only
+  // the small "≈ X USDT" caption below reads the live jittered feed.
+  const displayValue = convertUsdTo(totalUsdReal, currency, realPricesSnapshotRef.current);
 
   return (
     <div style={{ paddingTop: "var(--space-11)" }}>

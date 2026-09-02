@@ -192,7 +192,7 @@ function UploadForm({ accessToken, onSubmitted, t }) {
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError(`${fieldLabel}: file is too large — 5MB maximum`);
+      setError(`${fieldLabel}: file is too large ~ 5MB maximum`);
       return;
     }
     setter(file);

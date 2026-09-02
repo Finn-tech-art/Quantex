@@ -237,7 +237,7 @@ export default function FakeSessionPage() {
               margin: 0,
             }}
           >
-            Each session is independently generated — run again for new results.
+            Each session is independently generated. Run again for new results.
           </p>
         )}
       </div>
@@ -626,7 +626,7 @@ function CreditNotice({ credited, amount }) {
             color: "var(--ink-base)",
           }}
         >
-          +${Number(amount).toFixed(2)} USDT added — visible in your Wallet.
+          +${Number(amount).toFixed(2)} USDT added. Visible in your Wallet.
         </span>
       </div>
     );
@@ -649,7 +649,7 @@ function CreditNotice({ credited, amount }) {
           color: "var(--ink-soft)",
         }}
       >
-        Loss session — no real funds deducted.
+        Loss session. No real funds deducted.
       </span>
     </div>
   );

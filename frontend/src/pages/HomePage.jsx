@@ -1162,7 +1162,7 @@ const NEWS_ARTICLES = [
   {
     tag: "MARKET",
     title: "ETH grinds higher as staking supply keeps tightening",
-    body: "Ether has posted a slow, steady climb over the past two weeks, a move traders are attributing partly to a shrinking liquid supply rather than any single catalyst. The validator queue has lengthened again, meaning more ETH is being locked into staking faster than it is being unstaked, which mechanically reduces the amount available to trade on exchanges. At the same time, activity on layer-2 networks has continued absorbing transaction demand that used to hit the mainnet directly, keeping gas fees low even as usage climbs. Some traders see this combination — tightening float plus healthy underlying usage — as a more sustainable setup than a purely speculative rally. Derivatives data shows funding rates rising only gradually alongside spot price, rather than spiking, which suggests the move so far has been driven more by spot accumulation than by leveraged long positions chasing the trend. The next few sessions will show whether that steady character holds.",
+    body: "Ether has posted a slow, steady climb over the past two weeks, a move traders are attributing partly to a shrinking liquid supply rather than any single catalyst. The validator queue has lengthened again, meaning more ETH is being locked into staking faster than it is being unstaked, which mechanically reduces the amount available to trade on exchanges. At the same time, activity on layer-2 networks has continued absorbing transaction demand that used to hit the mainnet directly, keeping gas fees low even as usage climbs. Some traders see this combination ~ tightening float plus healthy underlying usage ~ as a more sustainable setup than a purely speculative rally. Derivatives data shows funding rates rising only gradually alongside spot price, rather than spiking, which suggests the move so far has been driven more by spot accumulation than by leveraged long positions chasing the trend. The next few sessions will show whether that steady character holds.",
   },
   {
     tag: "MARKET",
@@ -1771,28 +1771,28 @@ const DISCOVER_ARTICLES = [
     tag: "GRID",
     icon: "bots",
     title: "Grid trading, step by step",
-    body: "The strategy behind Quantex's Grid bots — buying dips and selling rallies automatically inside a price range.",
+    body: "The strategy behind Quantex's Grid bots ~ buying dips and selling rallies automatically inside a price range.",
     url: "https://academy.binance.com/en/articles/step-by-step-guide-to-grid-trading-on-binance-futures",
   },
   {
     tag: "DCA",
     icon: "dollar",
     title: "What is dollar-cost averaging?",
-    body: "The idea behind Quantex's DCA bots — investing a fixed amount on a schedule instead of trying to time the market.",
+    body: "The idea behind Quantex's DCA bots ~ investing a fixed amount on a schedule instead of trying to time the market.",
     url: "https://academy.binance.com/en/articles/dollar-cost-averaging-dca-explained",
   },
   {
     tag: "MOMENTUM",
     icon: "markets",
     title: "Reading market momentum",
-    body: "How momentum traders spot when a move is just getting started — and when it's already running out of steam.",
+    body: "How momentum traders spot when a move is just getting started ~ and when it's already running out of steam.",
     url: "https://academy.binance.com/en/glossary/market-momentum",
   },
   {
     tag: "SPOT",
     icon: "trade",
     title: "Spot trading, the basics",
-    body: "No leverage, no liquidations — just buying and selling what you actually own, the way every trade on Quantex works.",
+    body: "No leverage, no liquidations ~ just buying and selling what you actually own, the way every trade on Quantex works.",
     url: "https://academy.binance.com/en/articles/what-is-a-spot-market-and-how-to-do-spot-trading",
   },
   {

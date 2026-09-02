@@ -223,7 +223,7 @@ export default function TradePage() {
           body={
             <>
               {t("trade.confirmPrice", { price: confirmSnapshot?.price?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
-              {" — "}
+              {" ~ "}
               {t("trade.confirmTotal", { amount: confirmSnapshot?.totalUsdt?.toFixed(2) })}
               {error && (
                 <div style={{ marginTop: "var(--space-4)" }}>

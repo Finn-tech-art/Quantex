@@ -314,7 +314,7 @@ export default function CreateBotPage() {
             <>
               {t("bots.create.confirmBody")}
               <div style={{ marginTop: "var(--space-4)", fontWeight: 600, color: "var(--ink-base)" }}>
-                {allocationAmount} USDT — {pair} · {t(`bots.create.sessionLengthOption${sessionLengthMinutes}`)}
+                {allocationAmount} USDT ~ {pair} · {t(`bots.create.sessionLengthOption${sessionLengthMinutes}`)}
               </div>
               {error && (
                 <div style={{ marginTop: "var(--space-4)" }}>

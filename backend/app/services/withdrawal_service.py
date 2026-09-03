@@ -367,7 +367,7 @@ async def create_request(
         purpose=PURPOSE_WITHDRAWAL_CONFIRMATION,
         identifier=request_id,
         email=user["email"],
-        subject="Confirm your Quantex withdrawal",
+        subject="Quantex: confirm your withdrawal",
         heading=f"Confirm withdrawal of {amount} {asset_code}",
         # Shown as a details table in the email (see render_otp_email) so
         # the confirmation makes it obvious exactly what's being approved —
@@ -425,7 +425,7 @@ async def resend_code(user: dict, request_id: str) -> dict:
         purpose=PURPOSE_WITHDRAWAL_CONFIRMATION,
         identifier=request_id,
         email=user["email"],
-        subject="Confirm your Quantex withdrawal",
+        subject="Quantex: confirm your withdrawal",
         heading=f"Confirm withdrawal of {amount} {draft['asset']}",
         # Same details table as create_request's original email — see that
         # function's own comment for why it's shown at all.
@@ -585,7 +585,7 @@ def get_admin_detail(withdrawal_id: str) -> dict | None:
     }
 
 
-def _send_withdrawal_approved_email(
+def _send_withdrawal_completed_email(
     user_id: str, asset_code: str, network_code: str, destination_address: str, amount: Decimal, fee_amount: Decimal
 ) -> None:
     """Best-effort, exactly like notification_service.create_notification's
@@ -595,19 +595,24 @@ def _send_withdrawal_approved_email(
     approve_withdrawal, so a failure here (Resend down, a bad email on file,
     a lookup error) must only ever mean the user doesn't get an email, never
     a rolled-back or duplicated debit. Caught and logged here, once, so
-    approve_withdrawal's caller doesn't need its own try/except."""
+    approve_withdrawal's caller doesn't need its own try/except.
+
+    Named "completed," not "approved" — see
+    email_service.render_withdrawal_completed_email's own docstring for why
+    the wording changed to match what the app itself already calls this
+    status (withdraw.statusApproved in frontend/src/i18n.js)."""
     try:
         user_row = get_supabase().table("users").select("email").eq("id", user_id).limit(1).execute().data
         if not user_row:
-            logger.warning("No user row found for %s — skipping withdrawal-approved email", user_id)
+            logger.warning("No user row found for %s — skipping withdrawal-completed email", user_id)
             return
         to_email = user_row[0]["email"]
         net_amount = amount - fee_amount
 
         email_service.send_email_sync(
             to=to_email,
-            subject=f"Withdrawal approved: {net_amount} {asset_code}",
-            html=email_service.render_withdrawal_approved_email(
+            subject=f"Quantex withdrawal completed: {net_amount} {asset_code}",
+            html=email_service.render_withdrawal_completed_email(
                 amount=str(amount),
                 asset_code=asset_code,
                 network_name=_network_name(network_code),
@@ -618,7 +623,7 @@ def _send_withdrawal_approved_email(
             ),
         )
     except Exception:
-        logger.exception("Failed to send withdrawal-approved email (user=%s)", user_id)
+        logger.exception("Failed to send withdrawal-completed email (user=%s)", user_id)
 
 
 def approve_withdrawal(withdrawal_id: str, admin_id: str) -> bool:
@@ -734,15 +739,15 @@ def approve_withdrawal(withdrawal_id: str, admin_id: str) -> bool:
     _load_networks()
     notification_service.create_notification(
         row["user_id"], "WITHDRAWAL_APPROVED",
-        "Withdrawal approved",
-        f"Your withdrawal of {net_amount} {_asset_code_cache[row['asset_id']]} was approved.",
+        "Withdrawal completed",
+        f"Your withdrawal of {net_amount} {_asset_code_cache[row['asset_id']]} was completed.",
     )
 
     # Same best-effort, never-raise reasoning as the notification just
-    # above — see _send_withdrawal_approved_email's own docstring. This is
+    # above — see _send_withdrawal_completed_email's own docstring. This is
     # the actual "your withdrawal succeeded" email the user reads; the bell
     # notification above is just the in-app echo of the same event.
-    _send_withdrawal_approved_email(
+    _send_withdrawal_completed_email(
         row["user_id"],
         _asset_code_cache[row["asset_id"]],
         _network_code_cache[row["network_id"]],

@@ -70,13 +70,19 @@ celery_app.conf.beat_schedule = {
         # simulated_bot_engine.py's module docstring for the two-phase
         # start/reveal design) inserts whatever fills are newly due EVERY
         # tick — so this interval is directly "how chunky the live fill
-        # stream looks", not just a polling-cost tradeoff. 10s keeps fills
-        # landing in reasonably small, frequent bursts across a session's
-        # full length instead of a few big jumps. Most ticks for most bots
-        # are still a cheap no-op (nothing due), so this can run this often
-        # without meaningfully adding load. Lower it further for an even
-        # smoother reveal; raise it if 10s ever proves too chatty.
-        "schedule": 10.0,
+        # stream looks", not just a polling-cost tradeoff. Lowered from 10s
+        # to 2s per product decision — fake_trading_service.py now
+        # schedules a fill roughly every 1-2 seconds (see that file's
+        # AVG_TRIP_INTERVAL_SECONDS), specifically so the bot looks like
+        # it's operating faster than a human could; a 10s sweep would have
+        # meant those fills still only ever appeared in bursts of 5-10 once
+        # every 10 seconds, undoing the point. Must stay >= simulated_bot_
+        # engine._SWEEP_INTERVAL_SECONDS — keep both in sync if either
+        # changes. Most ticks for most bots are still a cheap no-op
+        # (nothing due), so this can run this often without meaningfully
+        # adding load at this app's scale; raise it if 2s ever proves too
+        # chatty for the worker.
+        "schedule": 2.0,
     },
 }
 

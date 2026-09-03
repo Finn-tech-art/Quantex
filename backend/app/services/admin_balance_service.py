@@ -4,8 +4,24 @@
 # balance without needing a real on-chain deposit first, and for why this
 # goes through record_ledger_entry() rather than a direct UPDATE on
 # balances (keeps the trigger-maintained balances.amount correct
-# automatically, and shows up in the user's own activity history exactly
-# like a deposit or bonus would).
+# automatically).
+#
+# A CREDIT is deliberately recorded as entry_type DEPOSIT, not the separate
+# ADMIN_ADJUSTMENT type the migration also seeds — product decision: an
+# admin-granted balance should be completely indistinguishable from a real
+# on-chain deposit everywhere a user (or the admin dashboard) can see it —
+# the activity history (WalletPage.jsx's wallet.activityTypes.DEPOSIT
+# label), the bell notification (same DEPOSIT_CONFIRMED copy
+# chain_watcher_service._credit_deposit sends for a real one), and the
+# admin overview dashboard's deposit counts/totals and per-country "active"
+# figure (admin_overview_service.py, which both key off entry_type
+# DEPOSIT). The metadata still records source="admin_adjustment" plus which
+# admin did it, so the real distinction — "did this come from an actual
+# wallet or from the admin panel" — stays fully auditable in the raw
+# ledger; only the user-facing categorization changes, not the underlying
+# record. A DEBIT keeps the ADMIN_ADJUSTMENT type: "deposit" has no
+# sensible meaning for money being removed, and nothing asked for a debit
+# to look like anything other than what it is.
 #
 # Same "look a user up by email, since an admin thinks in emails not UUIDs"
 # reasoning session_limit_service.get_user_by_email already documents —
@@ -17,6 +33,7 @@ from decimal import Decimal, InvalidOperation
 
 from postgrest.exceptions import APIError
 
+from app.services import notification_service
 from app.services.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -89,7 +106,9 @@ def get_balance(user_id: str) -> str:
 def adjust_balance(user_id: str, amount: Decimal, admin_id: str, note: str | None) -> dict:
     """Credits (amount > 0) or debits (amount < 0) the user's USDT balance
     by exactly `amount`, through the same record_ledger_entry() RPC every
-    other ledger write in this codebase uses.
+    other ledger write in this codebase uses. See this module's header
+    comment for why a credit is written as entry_type DEPOSIT (so it reads
+    as a real deposit everywhere) while a debit stays ADMIN_ADJUSTMENT.
 
     Returns {"applied": bool, "balance": str, "reason": str | None}.
       applied=False, reason="insufficient_balance": a debit larger than the
@@ -101,13 +120,16 @@ def adjust_balance(user_id: str, amount: Decimal, admin_id: str, note: str | Non
         reflects it — `balance` is read fresh after the write, not
         computed locally, so it can never drift from what Postgres
         actually has."""
+    is_credit = amount > 0
+    entry_type_code = "DEPOSIT" if is_credit else "ADMIN_ADJUSTMENT"
+
     try:
         get_supabase().rpc(
             "record_ledger_entry",
             {
                 "p_user_id": user_id,
                 "p_asset_id": _asset_id(ADJUSTABLE_ASSET),
-                "p_entry_type_id": _entry_type_id("ADMIN_ADJUSTMENT"),
+                "p_entry_type_id": _entry_type_id(entry_type_code),
                 "p_amount": str(amount),
                 "p_metadata": {"source": "admin_adjustment", "admin_id": admin_id, "note": note},
             },
@@ -120,6 +142,20 @@ def adjust_balance(user_id: str, amount: Decimal, admin_id: str, note: str | Non
             )
             return {"applied": False, "balance": get_balance(user_id), "reason": "insufficient_balance"}
         raise
+
+    if is_credit:
+        # Same notification, same copy, chain_watcher_service._credit_deposit
+        # sends for a real on-chain deposit — see this module's header
+        # comment for why that indistinguishability is the whole point.
+        # Never allowed to block or fail this response if it errors, same
+        # "the ledger write already landed for real, the bell is a
+        # courtesy on top" guarantee notification_service.py's module
+        # docstring commits to for every one of its callers.
+        notification_service.create_notification(
+            user_id, "DEPOSIT_CONFIRMED",
+            "Deposit received",
+            f"{amount} {ADJUSTABLE_ASSET} was credited to your balance.",
+        )
 
     return {"applied": True, "balance": get_balance(user_id), "reason": None}
 

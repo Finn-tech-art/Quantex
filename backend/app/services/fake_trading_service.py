@@ -302,16 +302,20 @@ def generate_fake_trading_result(
     # One trip roughly every AVG_TRIP_INTERVAL_SECONDS, rather than a fixed
     # 8-12 regardless of session length — so a 5-minute session and a
     # 60-minute one both feel like a steady stream of fills rather than the
-    # same handful of trades stretched thin over an hour. Matched to
-    # simulated_bot_engine._SWEEP_INTERVAL_SECONDS (10s): that's the actual
-    # floor on how often a fill can be REVEALED in real time regardless of
-    # how densely trips are scheduled here, so spacing them much tighter
-    # than this wouldn't read as any more frequent to someone watching —
-    # they'd just arrive in bursts of 2+ on the same sweep tick. A short
-    # 5-minute session still gets a floor of 12 trips (rng.randint's old
-    # lower bound) so it never feels sparse even though there's less real
-    # time to spread them across.
-    AVG_TRIP_INTERVAL_SECONDS = 10
+    # same handful of trades stretched thin over an hour. Each trip is 2
+    # fills (BUY + SELL), so an average interval of 2s here works out to
+    # roughly 1 fill/second overall — deliberately faster than a human could
+    # place orders, per the product decision behind this number. Matched to
+    # simulated_bot_engine._SWEEP_INTERVAL_SECONDS (also lowered, to 2s,
+    # alongside this): that's the actual floor on how often a fill can be
+    # REVEALED in real time regardless of how densely trips are scheduled
+    # here, so spacing them much tighter than the sweep interval wouldn't
+    # read as any more frequent to someone watching — they'd just arrive in
+    # bigger bursts on the same sweep tick instead of a smooth trickle. A
+    # short 5-minute session still gets a floor of 12 trips (rng.randint's
+    # old lower bound) so it never feels sparse even though there's less
+    # real time to spread them across.
+    AVG_TRIP_INTERVAL_SECONDS = 2
     num_trips = max(12, round(session_seconds / AVG_TRIP_INTERVAL_SECONDS))
     now = datetime.now(tz=timezone.utc)
     session_start = now - timedelta(seconds=session_seconds)
@@ -367,6 +371,17 @@ def generate_fake_trading_result(
     # movement genuine.
     base_interval = session_seconds / (num_trips + 1)
 
+    # How much room to leave at the very start/end of the session for a
+    # trip's buy (start) or sell (end) to actually land inside the session
+    # window — both scale with base_interval now rather than fixed 15s/90s,
+    # which were sized for the old ~10s trip cadence. At the new default
+    # ~2s cadence those fixed numbers would eat a large chunk of a short
+    # session and pile up many trips at the same clamped offset instead of
+    # spreading them out — see _generate_trips' own buy_offset_s clamp,
+    # which uses these.
+    start_floor_s = max(3.0, base_interval)
+    end_buffer_s = max(10.0, base_interval * 5.0)
+
     def _find_real_sell_offset(buy_offset_s: int, want_positive: bool, prefer_strong: bool) -> int:
         """Searches real offsets after buy_offset_s for one whose price moved
         in the `want_positive` direction (up if True, down if False).
@@ -397,7 +412,16 @@ def generate_fake_trading_result(
         tighter/looser in time, adjust SEARCH_SPAN_S below."""
         SEARCH_SPAN_S = 180
         search_hi = min(buy_offset_s + SEARCH_SPAN_S, session_seconds - 10)
-        search_lo = min(buy_offset_s + 25, search_hi)
+        # How soon after the buy a sell is allowed to fire — scales with
+        # base_interval (trips ~2s apart by default now, see
+        # AVG_TRIP_INTERVAL_SECONDS) rather than a fixed 25s, which used to
+        # assume trips were spaced far enough apart that nothing needed to
+        # sell any sooner than that. A fixed 25s floor here would have
+        # meant SELLS (which is where the visible P&L actually reveals)
+        # couldn't come any faster than one every ~25s even with buys
+        # firing every couple of seconds — defeating the point of a denser
+        # fill stream.
+        search_lo = min(buy_offset_s + max(2, round(base_interval)), search_hi)
         first_candidate = None
         best_candidate, best_abs_delta = None, None
         for _ in range(30):
@@ -436,7 +460,16 @@ def generate_fake_trading_result(
         # trade from ever showing an absurd price swing (e.g. the ~80%
         # "loss" on one SELL that prompted this whole v4 change — see the
         # module docstring).
-        hold_duration = rng.uniform(25.0, min(70.0, base_interval * 0.75))
+        # Scales with base_interval rather than a fixed 25-70s — that fixed
+        # band assumed trips were spaced far enough apart to need a hold
+        # that long; with trips ~2s apart by default now (see
+        # AVG_TRIP_INTERVAL_SECONDS), a 25s-minimum hold would badly lag
+        # behind how fast buys are firing. hold_min/hold_max both grow with
+        # base_interval so this naturally readjusts if that constant is
+        # ever changed back up.
+        hold_min = max(1.0, base_interval * 0.5)
+        hold_max = max(hold_min + 1.0, base_interval * 3.0)
+        hold_duration = rng.uniform(hold_min, hold_max)
         sell_offset_s = int(min(session_seconds - 10.0, buy_offset_s + hold_duration))
         # Anchored to chart_start_price (the real price this session
         # actually started at, when a real fetch succeeded at all — see
@@ -501,19 +534,26 @@ def generate_fake_trading_result(
         """Used for a WINNING session — how likely a trip is to go
         positive, as a function of fraction (0.0 = session start, 1.0 =
         session end). Reads as "starts reasonably well, dips into a run of
-        mostly losses through the middle, then closes strong" — the same
-        narrative arc this shape has always had — but built from MANY
-        similar-sized trips across the whole session rather than one big
-        win near the start, a couple of losses, and one big win at the
-        close. That's the point: the total should visibly accumulate
-        fill-by-fill as the session plays out, not jump in a couple of big
-        steps (see num_trips above, and simulated_bot_engine.py's reveal
-        loop, which is what actually streams these out over real time)."""
+        mostly losses, surges hard around the 40%-60% mark (the 4th-6th
+        minute of a 10-minute session — the reference point this window
+        was calibrated from, expressed as a fraction so it scales to any
+        session length), then tapers off to roughly flat for the rest of
+        the session" — moved per product decision away from an earlier
+        version where the big surge sat in the last third of the session
+        (a 10-minute session's "crazy profit" landing right at the very
+        end read as suspicious/unrealistic). Built from MANY similar-sized
+        trips across the whole session rather than a couple of big jumps —
+        the total should visibly accumulate fill-by-fill as the session
+        plays out (see num_trips above, and simulated_bot_engine.py's
+        reveal loop, which is what actually streams these out over real
+        time)."""
         if fraction < 0.20:
             return 0.70
-        if fraction < 0.65:
+        if fraction < 0.40:
             return 0.30
-        return 0.78
+        if fraction < 0.60:
+            return 0.82
+        return 0.50
 
     # How much smaller a MINORITY trip's planned share is kept, relative to
     # a majority one — see _generate_trips' own comment for what majority/
@@ -545,7 +585,7 @@ def generate_fake_trading_result(
             buy_offset_s = base_interval * (i + 1) + rng.uniform(
                 -base_interval * 0.25, base_interval * 0.25
             )
-            buy_offset_s = max(15.0, min(session_seconds - 90.0, buy_offset_s))
+            buy_offset_s = max(start_floor_s, min(session_seconds - end_buffer_s, buy_offset_s))
             buy_offset_s = int(buy_offset_s)
 
             fraction = (i + 1) / num_trips

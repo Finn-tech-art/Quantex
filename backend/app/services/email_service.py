@@ -75,67 +75,82 @@ def _escape(value: str) -> str:
     return html_module.escape(str(value))
 
 
-def render_otp_email(code: str, heading: str, details: list[tuple[str, str]] | None = None) -> str:
-    """Builds the full HTML body Resend sends for every OTP-code email this
-    app has (email verification, withdrawal confirmation — see
-    otp_service.generate_and_send_otp, the only caller). One shared template
-    for both rather than two separate ones, so a branding tweak (logo,
-    colors, footer text) only ever needs to change in this one place.
+# ── Shared design tokens ─────────────────────────────────────────────────────
+# Copy-pasted hex values, NOT var(--...) tokens from index.css — email HTML
+# is sent to Resend as a standalone string with no build step and no access
+# to the frontend's CSS at all, so the design system's CSS custom properties
+# don't exist here. These exact hex values ARE those tokens' values (see
+# quantex-design-system-spec_2.md Section 1) copied by hand; if a token's
+# value ever changes there, update it here too to keep emails visually
+# matching the app. Quantex keeps its own cream/teal palette in every email
+# below — matching a real exchange's STRUCTURE (see _security_notice_html
+# and the anatomy every render_* function follows) is not the same thing as
+# matching Bybit's dark surfaces or yellow accent, which this app never uses
+# anywhere, emails included.
+TEAL_BASE = "#0E6B62"    # --teal-base — heading text, code, table labels
+INK_BASE = "#211D16"     # --ink-base — body copy
+INK_SOFT = "#6B6152"     # --ink-soft — footer/fine-print text
+CREAM_DEEP = "#EEE6D3"   # --cream-deep — the details table's background
+CREAM_LINE = "#E0D5BE"   # --cream-line — borders/dividers
+WARNING_BG = "#F2E4C8"   # --warning-bg — the security-notice box's background
+WARNING_TEXT = "#8A6A2C"  # --warning-text — that box's label/border color
 
-    code: the 6-digit code itself, rendered large and spaced out.
-    heading: the one-line, per-purpose headline under the logo — e.g.
-        "Verify your email" or "Confirm withdrawal of 50 USDT".
-    details: optional list of (label, value) rows rendered as a plain
-        key/value table between the heading and the code — e.g. a
-        withdrawal's network/destination/fee. None (the default) renders no
-        table at all, which is what plain email verification uses.
 
-    Colors below are copy-pasted hex values, NOT var(--...) tokens from
-    index.css — email HTML is sent to Resend as a standalone string with no
-    build step and no access to the frontend's CSS at all, so the design
-    system's CSS custom properties don't exist here. These exact hex values
-    ARE those tokens' values (see quantex-design-system-spec_2.md Section 1)
-    copied by hand; if a token's value ever changes there, update it here
-    too to keep emails visually matching the app.
-    """
-    TEAL_BASE = "#0E6B62"    # --teal-base — heading text, code, table labels
-    INK_BASE = "#211D16"     # --ink-base — body copy
-    INK_SOFT = "#6B6152"     # --ink-soft — footer/fine-print text
-    CREAM_DEEP = "#EEE6D3"   # --cream-deep — the details table's background
-    CREAM_LINE = "#E0D5BE"   # --cream-line — borders/dividers
-
-    # Renders nothing at all (empty string) when details is None/empty,
-    # rather than an empty table — this is what keeps the plain email-
-    # verification message exactly as simple as before, with no visual
-    # leftover from this feature existing for withdrawals.
-    details_html = ""
-    if details:
-        rows = "".join(
-            f"""
-            <tr>
-              <td style="padding: 8px 0; color: {INK_SOFT}; font-size: 13px;">{_escape(label)}</td>
-              <td style="padding: 8px 0; color: {INK_BASE}; font-size: 13px; font-weight: 600; text-align: right;">{_escape(value)}</td>
-            </tr>
-            """
-            for label, value in details
-        )
-        details_html = f"""
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-               style="background: {CREAM_DEEP}; border: 1px solid {CREAM_LINE}; border-radius: 12px; padding: 4px 16px; margin: 20px 0;">
-          {rows}
-        </table>
+def _details_table_html(details: list[tuple[str, str]]) -> str:
+    """Shared plain key/value table — every email below shows one of these
+    between its headline figure and its security notice. A <table> rather
+    than flexbox/grid: email clients (Outlook especially) have notoriously
+    poor/inconsistent support for anything but table-based layout, which is
+    the actual standard for HTML email, not a webpage-era leftover."""
+    rows = "".join(
+        f"""
+        <tr>
+          <td style="padding: 8px 0; color: {INK_SOFT}; font-size: 13px;">{_escape(label)}</td>
+          <td style="padding: 8px 0; color: {INK_BASE}; font-size: 13px; font-weight: 600; text-align: right;">{_escape(value)}</td>
+        </tr>
         """
+        for label, value in details
+    )
+    return f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="background: {CREAM_DEEP}; border: 1px solid {CREAM_LINE}; border-radius: 12px; padding: 4px 16px; margin: 20px 0;">
+      {rows}
+    </table>
+    """
 
+
+def _security_notice_html(text: str) -> str:
+    """A visually distinct, bordered callout every email below ends with
+    (before the plain copyright footer) — the "if this wasn't you" block
+    every real exchange transactional email carries as its own separate,
+    hard-to-miss section rather than a throwaway line of fine print. Same
+    box, same color, in all three emails below; what changes between a
+    routine OTP code and an actual completed withdrawal is the WORDING
+    (see each render_* function's call site), not a different color — see
+    this module's own note on why no second, invented color was added just
+    for the withdrawal email."""
+    return f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="background: {WARNING_BG}; border-left: 3px solid {WARNING_TEXT}; border-radius: 8px; padding: 12px 16px; margin: 20px 0;">
+      <tr>
+        <td style="font-size: 11.5px; color: {WARNING_TEXT}; font-weight: 700; letter-spacing: 0.04em; padding-bottom: 4px; text-transform: uppercase;">
+          Security notice
+        </td>
+      </tr>
+      <tr>
+        <td style="font-size: 12.5px; color: {INK_SOFT}; line-height: 1.5;">{text}</td>
+      </tr>
+    </table>
+    """
+
+
+def _email_shell(body_html: str) -> str:
+    """The header (logo + wordmark) and footer every email below shares,
+    wrapped around whatever body_html each render_* function builds for
+    itself — pulled out once so the outer shell (and any future brand
+    change to it) only ever needs to be edited in one place."""
     return f"""
     <div style="font-family: 'Space Grotesk', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
-      <!-- Logo + wordmark header — mark on the left, "Quantex" text beside
-           it, matching the design system's horizontal lockup (Section 2's
-           "Wordmark" note: mark left, wordmark right). A <table> here
-           rather than flexbox: email clients (Outlook especially) have
-           notoriously poor/inconsistent flexbox and even plain block/inline
-           layout support, so table-based layout is the actual standard for
-           HTML email, not a webpage-era leftover — the details table below
-           uses the same approach for the same reason. -->
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom: 28px;">
         <tr>
           <td style="padding-right: 10px;">
@@ -145,6 +160,35 @@ def render_otp_email(code: str, heading: str, details: list[tuple[str, str]] | N
         </tr>
       </table>
 
+      {body_html}
+
+      <div style="border-top: 1px solid {CREAM_LINE}; margin-top: 28px; padding-top: 16px;">
+        <p style="font-size: 11px; color: {INK_SOFT}; margin: 0;">
+          Quantex &middot; This is an automated message. Replies to this address aren't monitored.
+        </p>
+      </div>
+    </div>
+    """
+
+
+def render_otp_email(code: str, heading: str, details: list[tuple[str, str]] | None = None) -> str:
+    """Builds the full HTML body Resend sends for every OTP-code email this
+    app has (email verification, withdrawal confirmation — see
+    otp_service.generate_and_send_otp, the only caller). One shared template
+    for both rather than two separate ones, so a branding tweak only ever
+    needs to change in this one place.
+
+    code: the 6-digit code itself, rendered large and spaced out.
+    heading: the one-line, per-purpose headline under the logo — e.g.
+        "Verify your email" or "Confirm withdrawal of 50 USDT".
+    details: optional list of (label, value) rows rendered as a plain
+        key/value table under the code — e.g. a withdrawal's network/
+        destination/fee. None (the default) renders no table at all, which
+        is what plain email verification uses.
+    """
+    details_html = _details_table_html(details) if details else ""
+
+    body_html = f"""
       <h2 style="font-size: 18px; color: {INK_BASE}; margin: 0 0 8px;">{_escape(heading)}</h2>
       <p style="font-size: 14px; color: {INK_SOFT}; margin: 0 0 4px;">Your verification code is:</p>
 
@@ -152,19 +196,12 @@ def render_otp_email(code: str, heading: str, details: list[tuple[str, str]] | N
 
       {details_html}
 
-      <p style="font-size: 13px; color: {INK_SOFT}; margin: 20px 0 0;">
-        This code expires in 10 minutes. If you didn't request this, you can safely ignore this email —
-        no changes will be made to your account.
-      </p>
-
-      <!-- Footer — plain copyright line, separated by a hairline border
-           matching --cream-line. Update the year/copy here directly if it
-           ever needs to change; nothing else in this file references it. -->
-      <div style="border-top: 1px solid {CREAM_LINE}; margin-top: 28px; padding-top: 16px;">
-        <p style="font-size: 11px; color: {INK_SOFT}; margin: 0;">Quantex &middot; This is an automated message, please don't reply to it.</p>
-      </div>
-    </div>
+      {_security_notice_html(
+          "This code expires in 10 minutes. Never share it with anyone, including Quantex staff. "
+          "If you didn't request this, you can safely ignore this email. No changes will be made to your account."
+      )}
     """
+    return _email_shell(body_html)
 
 
 def render_deposit_confirmed_email(
@@ -180,11 +217,7 @@ def render_deposit_confirmed_email(
     sent from chain_watcher_service._credit_deposit the moment a deposit is
     actually credited (never for an unconfirmed/pending sighting; there is
     deliberately no separate "we've spotted it, hang on" email today, only
-    this one). Reuses the exact same header/footer/color-token structure as
-    render_otp_email above (same reasoning: one visual language, one place
-    to update it) but replaces that template's big verification-code number
-    with a big "+amount asset" figure, and its plain details table now
-    carries deposit specifics instead of an OTP's context rows.
+    this one).
 
     amount / asset_code: e.g. "20.000000" / "USDT" — rendered together as
         the headline figure, so pass amount already formatted the way it
@@ -205,26 +238,13 @@ def render_deposit_confirmed_email(
     new_balance: the user's resulting balance for this asset, already
         formatted as a plain decimal string.
     """
-    TEAL_BASE = "#0E6B62"
-    INK_BASE = "#211D16"
-    INK_SOFT = "#6B6152"
-    CREAM_DEEP = "#EEE6D3"
-    CREAM_LINE = "#E0D5BE"
-
-    details = [
-        ("Network", network_name),
-        ("Transaction ID", f"{tx_hash[:10]}…{tx_hash[-8:]}"),
-        ("Credited at", credited_at),
-        ("New balance", f"{new_balance} {asset_code}"),
-    ]
-    detail_rows = "".join(
-        f"""
-        <tr>
-          <td style="padding: 8px 0; color: {INK_SOFT}; font-size: 13px;">{_escape(label)}</td>
-          <td style="padding: 8px 0; color: {INK_BASE}; font-size: 13px; font-weight: 600; text-align: right;">{_escape(value)}</td>
-        </tr>
-        """
-        for label, value in details
+    details_html = _details_table_html(
+        [
+            ("Network", network_name),
+            ("Transaction ID", f"{tx_hash[:10]}…{tx_hash[-8:]}"),
+            ("Credited at", credited_at),
+            ("New balance", f"{new_balance} {asset_code}"),
+        ]
     )
 
     # Omitted entirely (not just left blank) when explorer_url is None, so a
@@ -233,48 +253,32 @@ def render_deposit_confirmed_email(
     explorer_html = ""
     if explorer_url:
         explorer_html = f"""
-        <p style="margin: 16px 0 0;">
+        <p style="margin: -8px 0 0;">
           <a href="{_escape(explorer_url)}" style="color: {TEAL_BASE}; font-size: 13px; font-weight: 600; text-decoration: none;">
             View transaction on-chain &rarr;
           </a>
         </p>
         """
 
-    return f"""
-    <div style="font-family: 'Space Grotesk', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom: 28px;">
-        <tr>
-          <td style="padding-right: 10px;">
-            <img src="{LOGO_URL}" alt="Quantex" width="28" height="28" style="display: block;" />
-          </td>
-          <td style="font-size: 18px; font-weight: 700; color: {TEAL_BASE};">Quantex</td>
-        </tr>
-      </table>
-
+    body_html = f"""
       <h2 style="font-size: 18px; color: {INK_BASE}; margin: 0 0 8px;">Deposit confirmed</h2>
       <p style="font-size: 14px; color: {INK_SOFT}; margin: 0 0 4px;">Your deposit has been credited to your balance:</p>
 
       <p style="font-size: 36px; font-weight: 700; color: {TEAL_BASE}; margin: 12px 0;">+{_escape(amount)} {_escape(asset_code)}</p>
 
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-             style="background: {CREAM_DEEP}; border: 1px solid {CREAM_LINE}; border-radius: 12px; padding: 4px 16px; margin: 20px 0;">
-        {detail_rows}
-      </table>
+      {details_html}
 
       {explorer_html}
 
-      <p style="font-size: 13px; color: {INK_SOFT}; margin: 20px 0 0;">
-        If you weren't expecting this deposit, please reach out so we can look into it.
-      </p>
-
-      <div style="border-top: 1px solid {CREAM_LINE}; margin-top: 28px; padding-top: 16px;">
-        <p style="font-size: 11px; color: {INK_SOFT}; margin: 0;">Quantex &middot; This is an automated message, please don't reply to it.</p>
-      </div>
-    </div>
+      {_security_notice_html(
+          "If you didn't make this deposit, review your account's recent activity right away. "
+          "Never share your login details or verification codes with anyone."
+      )}
     """
+    return _email_shell(body_html)
 
 
-def render_withdrawal_approved_email(
+def render_withdrawal_completed_email(
     amount: str,
     asset_code: str,
     network_name: str,
@@ -283,16 +287,20 @@ def render_withdrawal_approved_email(
     net_amount: str,
     approved_at: str,
 ) -> str:
-    """Builds the full HTML body for the "your withdrawal was approved" email
-    — sent from withdrawal_service.approve_withdrawal the moment an admin
-    approves a request (never for PENDING or REJECTED — see that function's
-    own comment for why REJECTED gets only an in-app notification, no
-    email). Same shared header/footer/color-token structure as
-    render_deposit_confirmed_email above, just with the details this
-    direction of money movement actually needs: where it's going and what
-    was deducted, rather than a transaction hash to look up (there's no
-    broadcast worker yet to produce one — see withdrawal_service.py's module
-    docstring).
+    """Builds the full HTML body for the "your withdrawal was completed"
+    email — sent from withdrawal_service.approve_withdrawal the moment an
+    admin approves a request (never for PENDING or REJECTED — see that
+    function's own comment for why REJECTED gets only an in-app
+    notification, no email).
+
+    Named "completed," not "approved," to match the exact wording
+    withdraw.statusApproved already shows in the app (frontend/src/i18n.js)
+    — the two used to disagree (this file said "approved," the app said
+    "completed"), which read as two different events to anyone comparing
+    the email against their withdrawal history. Fixed here rather than in
+    the frontend since "completed" is the more accurate word for what's
+    actually happened: this is the terminal state (see withdrawal_service.py's
+    module docstring on why there's no broadcast-tracking step after this).
 
     amount / asset_code: the amount the user originally requested, before
         the fee below is taken out — e.g. "100.000000" / "USDT".
@@ -307,57 +315,28 @@ def render_withdrawal_approved_email(
         no arithmetic itself.
     approved_at: already-formatted string (e.g. "2026-09-01 13:22 UTC").
     """
-    TEAL_BASE = "#0E6B62"
-    INK_BASE = "#211D16"
-    INK_SOFT = "#6B6152"
-    CREAM_DEEP = "#EEE6D3"
-    CREAM_LINE = "#E0D5BE"
-
-    details = [
-        ("Amount requested", f"{amount} {asset_code}"),
-        ("Network", network_name),
-        ("Destination", destination_address),
-        ("Fee", f"{fee_amount} {asset_code}"),
-        ("Net amount sent", f"{net_amount} {asset_code}"),
-        ("Approved at", approved_at),
-    ]
-    detail_rows = "".join(
-        f"""
-        <tr>
-          <td style="padding: 8px 0; color: {INK_SOFT}; font-size: 13px;">{_escape(label)}</td>
-          <td style="padding: 8px 0; color: {INK_BASE}; font-size: 13px; font-weight: 600; text-align: right;">{_escape(value)}</td>
-        </tr>
-        """
-        for label, value in details
+    details_html = _details_table_html(
+        [
+            ("Amount requested", f"{amount} {asset_code}"),
+            ("Network", network_name),
+            ("Destination", destination_address),
+            ("Fee", f"{fee_amount} {asset_code}"),
+            ("Net amount sent", f"{net_amount} {asset_code}"),
+            ("Completed at", approved_at),
+        ]
     )
 
-    return f"""
-    <div style="font-family: 'Space Grotesk', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom: 28px;">
-        <tr>
-          <td style="padding-right: 10px;">
-            <img src="{LOGO_URL}" alt="Quantex" width="28" height="28" style="display: block;" />
-          </td>
-          <td style="font-size: 18px; font-weight: 700; color: {TEAL_BASE};">Quantex</td>
-        </tr>
-      </table>
-
-      <h2 style="font-size: 18px; color: {INK_BASE}; margin: 0 0 8px;">Withdrawal approved</h2>
-      <p style="font-size: 14px; color: {INK_SOFT}; margin: 0 0 4px;">Your withdrawal request has been approved and sent:</p>
+    body_html = f"""
+      <h2 style="font-size: 18px; color: {INK_BASE}; margin: 0 0 8px;">Withdrawal completed</h2>
+      <p style="font-size: 14px; color: {INK_SOFT}; margin: 0 0 4px;">Your withdrawal request has been completed and sent:</p>
 
       <p style="font-size: 36px; font-weight: 700; color: {TEAL_BASE}; margin: 12px 0;">-{_escape(net_amount)} {_escape(asset_code)}</p>
 
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-             style="background: {CREAM_DEEP}; border: 1px solid {CREAM_LINE}; border-radius: 12px; padding: 4px 16px; margin: 20px 0;">
-        {detail_rows}
-      </table>
+      {details_html}
 
-      <p style="font-size: 13px; color: {INK_SOFT}; margin: 20px 0 0;">
-        If you weren't expecting this, please reach out so we can look into it.
-      </p>
-
-      <div style="border-top: 1px solid {CREAM_LINE}; margin-top: 28px; padding-top: 16px;">
-        <p style="font-size: 11px; color: {INK_SOFT}; margin: 0;">Quantex &middot; This is an automated message, please don't reply to it.</p>
-      </div>
-    </div>
+      {_security_notice_html(
+          "Didn't request this withdrawal? Your account may be compromised. "
+          "Review your recent activity and change your password immediately."
+      )}
     """
+    return _email_shell(body_html)

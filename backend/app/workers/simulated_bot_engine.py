@@ -83,11 +83,13 @@ def _publish_thinking(bot_id: str, reasoning_text: str) -> None:
 # from 30 to 15 so the bot narrates roughly twice as often per session.
 _THINKING_INTERVAL_SECONDS = 15
 
-# Must be >= the real simulated-bot-engine-sweep schedule (10s — see
+# Must match the real simulated-bot-engine-sweep schedule (see
 # celery_app.py's beat_schedule) so exactly one tick per
 # _THINKING_INTERVAL_SECONDS window lands inside this slice, never zero and
-# never two, regardless of small scheduling jitter between ticks.
-_SWEEP_INTERVAL_SECONDS = 10
+# never two, regardless of small scheduling jitter between ticks. Lowered
+# from 10 to 2 alongside that schedule — see its own comment for why (fills
+# now need to reveal roughly every 1-2 seconds, not just every 10).
+_SWEEP_INTERVAL_SECONDS = 2
 
 
 def _should_think_this_tick(elapsed_seconds: float) -> bool:

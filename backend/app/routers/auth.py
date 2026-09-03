@@ -139,7 +139,7 @@ async def send_verify_email_otp(user: dict = Depends(get_current_user)):
             purpose=PURPOSE_EMAIL_VERIFICATION,
             identifier=user["id"],
             email=user["email"],
-            subject="Verify your Quantex email",
+            subject="Quantex: verify your email",
             heading="Verify your email",
         )
     except OtpCooldownError as exc:

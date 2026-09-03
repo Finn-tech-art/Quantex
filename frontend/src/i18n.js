@@ -76,7 +76,7 @@ const resources = {
         addressLabel: 'Your deposit address',
         copy: 'Copy',
         copied: 'Copied',
-        minNotice: 'Deposits below $20 are not credited ~ send at least $20 worth on any network.',
+        minNotice: 'Deposits below $20 are not credited ~ send at least $20 worth of coins on TRC20.',
         waiting: 'Waiting for your deposit…',
         watchingNotice: "Deposit withing 20 minutes. Late deposits take time before they are credited to your balance.",
         credited: 'Deposit received',

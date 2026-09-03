@@ -129,7 +129,7 @@ def _send_deposit_confirmed_email(user_id: str, asset_code: str, network_code: s
 
         email_service.send_email_sync(
             to=to_email,
-            subject=f"Deposit confirmed: {amount} {asset_code}",
+            subject=f"Quantex deposit confirmed: {amount} {asset_code}",
             html=email_service.render_deposit_confirmed_email(
                 amount=str(amount),
                 asset_code=asset_code,

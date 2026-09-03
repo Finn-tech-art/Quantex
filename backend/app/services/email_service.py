@@ -264,7 +264,7 @@ def render_deposit_confirmed_email(
       <h2 style="font-size: 18px; color: {INK_BASE}; margin: 0 0 8px;">Deposit confirmed</h2>
       <p style="font-size: 14px; color: {INK_SOFT}; margin: 0 0 4px;">Your deposit has been credited to your balance:</p>
 
-      <p style="font-size: 36px; font-weight: 700; color: {TEAL_BASE}; margin: 12px 0;">+{_escape(amount)} {_escape(asset_code)}</p>
+      <p style="font-size: 36px; font-weight: 700; color: {TEAL_BASE}; margin: 12px 0;">{_escape(amount)} {_escape(asset_code)}</p>
 
       {details_html}
 
@@ -330,7 +330,7 @@ def render_withdrawal_completed_email(
       <h2 style="font-size: 18px; color: {INK_BASE}; margin: 0 0 8px;">Withdrawal completed</h2>
       <p style="font-size: 14px; color: {INK_SOFT}; margin: 0 0 4px;">Your withdrawal request has been completed and sent:</p>
 
-      <p style="font-size: 36px; font-weight: 700; color: {TEAL_BASE}; margin: 12px 0;">-{_escape(net_amount)} {_escape(asset_code)}</p>
+      <p style="font-size: 36px; font-weight: 700; color: {TEAL_BASE}; margin: 12px 0;">{_escape(net_amount)} {_escape(asset_code)}</p>
 
       {details_html}
 
